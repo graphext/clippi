@@ -1,0 +1,37 @@
+{
+  "name": "@clippi/cli",
+  "version": "0.1.0",
+  "description": "CLI for Clippi: manifest generation, validation, and development server",
+  "type": "module",
+  "bin": {
+    "clippi": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "clippi",
+    "cli",
+    "manifest",
+    "validation"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@clippi/core": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "vitest": "^2.1.0"
+  }
+}

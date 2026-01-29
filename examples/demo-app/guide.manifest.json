@@ -1,0 +1,221 @@
+{
+  "$schema": "https://clippi.net/schema/manifest.v1.json",
+  "meta": {
+    "app_name": "DemoApp",
+    "version": "1.0.0",
+    "generated_at": "2026-01-29T00:00:00Z"
+  },
+  "defaults": {
+    "timeout_ms": 10000
+  },
+  "elements": [
+    {
+      "id": "export-csv",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "format-csv" },
+          { "type": "css", "value": "[data-testid='export-format'] option[value='csv']" }
+        ]
+      },
+      "label": "Export to CSV",
+      "description": "Export your data to CSV format",
+      "keywords": ["export", "download", "csv", "file", "data"],
+      "category": "data",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "export-btn" },
+              { "type": "aria", "value": "Export data" }
+            ]
+          },
+          "instruction": "Click the Export button",
+          "success_condition": { "visible": "#export-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "export-format" }
+            ]
+          },
+          "instruction": "Select CSV from the format dropdown",
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "create-dataset",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "create-dataset-btn" },
+          { "type": "aria", "value": "Create new dataset" }
+        ]
+      },
+      "label": "Create New Dataset",
+      "description": "Create a new dataset from scratch",
+      "keywords": ["create", "new", "dataset", "add", "data"],
+      "category": "data",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "create-dataset-btn" }
+            ]
+          },
+          "instruction": "Click the '+ New Dataset' button",
+          "success_condition": { "visible": "#create-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "dataset-name-input" }
+            ]
+          },
+          "instruction": "Enter a name for your dataset",
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "import-data",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "import-btn" },
+          { "type": "aria", "value": "Import data" }
+        ]
+      },
+      "label": "Import Data",
+      "description": "Import data from a file",
+      "keywords": ["import", "upload", "file", "data", "csv", "excel"],
+      "category": "data"
+    },
+    {
+      "id": "search-datasets",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "search-input" },
+          { "type": "css", "value": "input[placeholder*='Search']" }
+        ]
+      },
+      "label": "Search Datasets",
+      "description": "Search through your datasets",
+      "keywords": ["search", "find", "filter", "dataset"],
+      "category": "data"
+    },
+    {
+      "id": "view-dataset",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "view-dataset" },
+          { "type": "css", "value": "table tbody tr:first-child button" }
+        ]
+      },
+      "label": "View Dataset",
+      "description": "Open and view a dataset",
+      "keywords": ["view", "open", "dataset", "see", "show"],
+      "category": "data"
+    },
+    {
+      "id": "nav-data",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "nav-data" },
+          { "type": "aria", "value": "Data section" }
+        ]
+      },
+      "label": "Data Section",
+      "description": "Go to the Data section",
+      "keywords": ["data", "section", "navigate", "menu"],
+      "category": "navigation"
+    },
+    {
+      "id": "nav-dashboard",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "nav-dashboard" }
+        ]
+      },
+      "label": "Dashboard",
+      "description": "Go to the Dashboard",
+      "keywords": ["dashboard", "home", "main", "navigate"],
+      "category": "navigation"
+    },
+    {
+      "id": "nav-settings",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "nav-settings" }
+        ]
+      },
+      "label": "Settings",
+      "description": "Go to Settings",
+      "keywords": ["settings", "preferences", "config", "configure"],
+      "category": "navigation"
+    },
+    {
+      "id": "user-profile",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "profile-link" }
+        ]
+      },
+      "label": "User Profile",
+      "description": "View and edit your profile",
+      "keywords": ["profile", "user", "account", "me"],
+      "category": "account",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "user-menu-btn" },
+              { "type": "aria", "value": "User menu" }
+            ]
+          },
+          "instruction": "Click on your avatar to open the menu",
+          "success_condition": { "visible": ".dropdown.open .dropdown-menu" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "profile-link" }
+            ]
+          },
+          "instruction": "Click on 'Profile'",
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "logout",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "logout-btn" }
+        ]
+      },
+      "label": "Logout",
+      "description": "Sign out of your account",
+      "keywords": ["logout", "sign out", "exit", "leave"],
+      "category": "account",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "user-menu-btn" }
+            ]
+          },
+          "instruction": "Click on your avatar to open the menu",
+          "success_condition": { "visible": ".dropdown.open .dropdown-menu" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "logout-btn" }
+            ]
+          },
+          "instruction": "Click 'Logout'",
+          "final": true
+        }
+      ]
+    }
+  ]
+}

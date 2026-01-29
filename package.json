@@ -1,0 +1,26 @@
+{
+  "name": "clippi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Visual cursor guidance library with conversational chat",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/clippi/clippi.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r run dev",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

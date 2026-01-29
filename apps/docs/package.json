@@ -1,0 +1,10 @@
+{
+  "name": "@clippi/docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clippi documentation",
+  "scripts": {
+    "dev": "echo 'Documentation site coming soon'",
+    "build": "echo 'Documentation site coming soon'"
+  }
+}

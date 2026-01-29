@@ -1,0 +1,184 @@
+/**
+ * Clippi Reference Backend Implementation
+ *
+ * This is a minimal Express server that demonstrates how to implement
+ * the Clippi backend contract. It handles intent classification and
+ * returns appropriate responses for the chat widget.
+ *
+ * In production, you would:
+ * 1. Use your own authentication
+ * 2. Connect to your preferred LLM provider
+ * 3. Add rate limiting and error handling
+ * 4. Store conversation history if needed
+ */
+
+import express from 'express'
+
+const app = express()
+app.use(express.json())
+
+// CORS middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204)
+  }
+  next()
+})
+
+// Configuration
+const PORT = process.env.PORT || 3001
+const LLM_PROVIDER = process.env.LLM_PROVIDER || 'mock' // 'openai' | 'anthropic' | 'gemini' | 'mock'
+
+/**
+ * Simple keyword-based intent classification
+ * In production, use an LLM for better accuracy
+ */
+function classifyIntent(query, manifest) {
+  const queryLower = query.toLowerCase()
+
+  // Check each element for keyword matches
+  for (const element of manifest) {
+    const keywords = [
+      ...element.keywords,
+      element.label.toLowerCase(),
+      ...element.description.toLowerCase().split(' ')
+    ]
+
+    const matchScore = keywords.filter(kw =>
+      queryLower.includes(kw.toLowerCase()) || kw.toLowerCase().includes(queryLower)
+    ).length
+
+    if (matchScore >= 1) {
+      return { type: 'guide', elementId: element.id, score: matchScore }
+    }
+  }
+
+  return { type: 'text', score: 0 }
+}
+
+/**
+ * Check if user has access based on conditions
+ * In production, this would check against your user database
+ */
+function checkAccess(elementId, context) {
+  // Demo: always allow access
+  // In production, you would:
+  // 1. Look up the element's conditions from the full manifest
+  // 2. Evaluate against the user's context
+  // 3. Return blocked response with reason if not allowed
+  return { allowed: true }
+}
+
+/**
+ * Generate a text response for non-guide queries
+ * In production, use an LLM for natural responses
+ */
+function generateTextResponse(query, manifest) {
+  // Simple fallback responses
+  const greetings = ['hi', 'hello', 'hey', 'help']
+  if (greetings.some(g => query.toLowerCase().includes(g))) {
+    return `Hi! I can help you navigate the app. Try asking about: ${manifest.map(e => e.label).join(', ')}`
+  }
+
+  return `I'm not sure how to help with that. I can guide you through: ${manifest.map(e => e.label).join(', ')}`
+}
+
+/**
+ * POST /api/clippi/chat
+ *
+ * Main chat endpoint. Receives user messages and returns appropriate responses.
+ *
+ * Request body:
+ * {
+ *   messages: [{ role: 'user' | 'assistant', content: string }],
+ *   context: { plan?: string, permissions?: string[], state?: object },
+ *   manifest: [{ id, label, description, keywords, category }]
+ * }
+ *
+ * Response:
+ * {
+ *   action: 'guide' | 'blocked' | 'text',
+ *   elementId?: string,      // For 'guide'
+ *   instruction?: string,    // For 'guide'
+ *   reason?: { type, missing?, message? },  // For 'blocked'
+ *   content?: string         // For 'text'
+ * }
+ */
+app.post('/api/clippi/chat', async (req, res) => {
+  try {
+    const { messages, context = {}, manifest = [] } = req.body
+
+    if (!messages || messages.length === 0) {
+      return res.status(400).json({ error: 'No messages provided' })
+    }
+
+    // Get the last user message
+    const lastMessage = messages[messages.length - 1]
+    if (lastMessage.role !== 'user') {
+      return res.status(400).json({ error: 'Last message must be from user' })
+    }
+
+    const query = lastMessage.content
+
+    // Classify intent
+    const intent = classifyIntent(query, manifest)
+
+    if (intent.type === 'guide') {
+      // Check access
+      const access = checkAccess(intent.elementId, context)
+
+      if (!access.allowed) {
+        return res.json({
+          action: 'blocked',
+          elementId: intent.elementId,
+          reason: {
+            type: access.reason || 'permission',
+            missing: access.missing,
+            message: access.message || 'Access denied'
+          }
+        })
+      }
+
+      // Find the element for instruction
+      const element = manifest.find(e => e.id === intent.elementId)
+
+      return res.json({
+        action: 'guide',
+        elementId: intent.elementId,
+        instruction: element?.description || 'Let me show you...'
+      })
+    }
+
+    // Text response fallback
+    const content = generateTextResponse(query, manifest)
+    return res.json({
+      action: 'text',
+      content
+    })
+
+  } catch (error) {
+    console.error('Chat error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+/**
+ * GET /health
+ * Health check endpoint
+ */
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', provider: LLM_PROVIDER })
+})
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Clippi backend running at http://localhost:${PORT}`)
+  console.log(`   Provider: ${LLM_PROVIDER}`)
+  console.log('')
+  console.log('Endpoints:')
+  console.log(`   POST http://localhost:${PORT}/api/clippi/chat`)
+  console.log(`   GET  http://localhost:${PORT}/health`)
+})

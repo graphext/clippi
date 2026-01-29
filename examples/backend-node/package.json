@@ -1,0 +1,19 @@
+{
+  "name": "@clippi/example-backend-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference backend implementation for Clippi",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@clippi/example-demo-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo app showcasing Clippi features",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve ."
+  }
+}

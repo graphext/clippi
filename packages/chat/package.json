@@ -1,0 +1,48 @@
+{
+  "name": "@clippi/chat",
+  "version": "0.1.0",
+  "description": "Chat widget Web Component for Clippi",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "clippi",
+    "chat",
+    "widget",
+    "web-component"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@clippi/core": "workspace:*",
+    "@clippi/cursor": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "vitest": "^2.1.0"
+  },
+  "sideEffects": false
+}
