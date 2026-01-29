@@ -21,6 +21,20 @@ export interface Selector {
 }
 
 /**
+ * Value condition for form element value detection
+ */
+export interface ValueCondition {
+  /** Selector for the form element */
+  selector: string | Selector
+  /** Exact value match */
+  equals?: string
+  /** Substring match */
+  contains?: string
+  /** Any non-empty value */
+  not_empty?: boolean
+}
+
+/**
  * Success condition for determining when a step is complete
  */
 export interface SuccessCondition {
@@ -38,6 +52,10 @@ export interface SuccessCondition {
     name: string
     value?: string
   }
+  /** Value check for form elements (uses polling, works with custom comboboxes) */
+  value?: ValueCondition
+  /** Click detection - true uses step's selector, or provide a specific selector */
+  click?: boolean | string | Selector
 }
 
 /**

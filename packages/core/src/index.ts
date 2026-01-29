@@ -35,6 +35,7 @@ export {
   StepSequencer,
   StepObserver,
   checkSuccessCondition,
+  checkValueCondition,
   type SequencerConfig,
   type SequencerState,
   type ObserverConfig,

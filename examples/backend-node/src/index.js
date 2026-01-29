@@ -13,6 +13,12 @@
  */
 
 import express from 'express'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const ROOT_DIR = join(__dirname, '..', '..', '..')
 
 const app = express()
 app.use(express.json())
@@ -28,6 +34,14 @@ app.use((req, res, next) => {
   next()
 })
 
+// Serve clippi packages (for import map resolution)
+app.use('/@clippi/core', express.static(join(ROOT_DIR, 'packages/core/dist')))
+app.use('/@clippi/cursor', express.static(join(ROOT_DIR, 'packages/cursor/dist')))
+app.use('/@clippi/chat', express.static(join(ROOT_DIR, 'packages/chat/dist')))
+
+// Serve demo app static files
+app.use(express.static(join(ROOT_DIR, 'examples/demo-app')))
+
 // Configuration
 const PORT = process.env.PORT || 3001
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'mock' // 'openai' | 'anthropic' | 'gemini' | 'mock'
@@ -38,8 +52,12 @@ const LLM_PROVIDER = process.env.LLM_PROVIDER || 'mock' // 'openai' | 'anthropic
  */
 function classifyIntent(query, manifest) {
   const queryLower = query.toLowerCase()
+  const queryWords = queryLower.split(/\s+/)
 
-  // Check each element for keyword matches
+  let bestMatch = null
+  let bestScore = 0
+
+  // Score each element and find the best match
   for (const element of manifest) {
     const keywords = [
       ...element.keywords,
@@ -47,13 +65,28 @@ function classifyIntent(query, manifest) {
       ...element.description.toLowerCase().split(' ')
     ]
 
-    const matchScore = keywords.filter(kw =>
-      queryLower.includes(kw.toLowerCase()) || kw.toLowerCase().includes(queryLower)
-    ).length
-
-    if (matchScore >= 1) {
-      return { type: 'guide', elementId: element.id, score: matchScore }
+    // Calculate score based on keyword matches
+    let score = 0
+    for (const kw of keywords) {
+      const kwLower = kw.toLowerCase()
+      // Exact word match in query (higher score)
+      if (queryWords.includes(kwLower)) {
+        score += 3
+      }
+      // Partial match (query contains keyword or vice versa)
+      else if (queryLower.includes(kwLower) || kwLower.includes(queryLower)) {
+        score += 1
+      }
     }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestMatch = { type: 'guide', elementId: element.id, score }
+    }
+  }
+
+  if (bestMatch && bestScore >= 1) {
+    return bestMatch
   }
 
   return { type: 'text', score: 0 }
@@ -175,10 +208,10 @@ app.get('/health', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Clippi backend running at http://localhost:${PORT}`)
-  console.log(`   Provider: ${LLM_PROVIDER}`)
-  console.log('')
-  console.log('Endpoints:')
-  console.log(`   POST http://localhost:${PORT}/api/clippi/chat`)
-  console.log(`   GET  http://localhost:${PORT}/health`)
+  console.log(``)
+  console.log(`  Clippi Demo running at http://localhost:${PORT}`)
+  console.log(``)
+  console.log(`  Open the URL above and click the chat bubble in the bottom-right corner.`)
+  console.log(`  Try asking: "How do I export data?"`)
+  console.log(``)
 })

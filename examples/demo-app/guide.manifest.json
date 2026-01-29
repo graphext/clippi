@@ -39,6 +39,69 @@
             ]
           },
           "instruction": "Select CSV from the format dropdown",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='export-format']",
+              "equals": "csv"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "export-confirm" }
+            ]
+          },
+          "instruction": "Click the Export button to download your data",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "export-excel",
+      "selector": {
+        "strategies": [
+          { "type": "css", "value": "[data-testid='export-format'] option[value='xlsx']" }
+        ]
+      },
+      "label": "Export to Excel",
+      "description": "Export your data to Excel (XLSX) format",
+      "keywords": ["export", "download", "excel", "xlsx", "spreadsheet", "file", "data"],
+      "category": "data",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "export-btn" },
+              { "type": "aria", "value": "Export data" }
+            ]
+          },
+          "instruction": "Click the Export button",
+          "success_condition": { "visible": "#export-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "export-format" }
+            ]
+          },
+          "instruction": "Select Excel (XLSX) from the format dropdown",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='export-format']",
+              "equals": "xlsx"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "export-confirm" }
+            ]
+          },
+          "instruction": "Click the Export button to download your data",
+          "success_condition": { "click": true },
           "final": true
         }
       ]

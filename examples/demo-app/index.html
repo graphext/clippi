@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clippi Demo App</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@clippi/core": "/@clippi/core/index.js",
+        "@clippi/cursor": "/@clippi/cursor/index.js",
+        "@clippi/chat": "/@clippi/chat/index.js"
+      }
+    }
+  </script>
   <style>
     * {
       box-sizing: border-box;
@@ -526,18 +535,14 @@
     })
   </script>
 
-  <!-- Clippi Chat Widget (uncomment when using with clippi packages) -->
-  <!--
+  <!-- Clippi Chat Widget -->
   <script type="module">
-    import { Clippi } from '@clippi/chat'
-
-    await Clippi.init({
-      manifest: '/guide.manifest.json',
-      llm: { endpoint: '/api/clippi/chat' },
-      theme: 'auto'
-    })
+    import '@clippi/chat'
   </script>
-  <clippi-chat />
-  -->
+  <clippi-chat
+    manifest="/guide.manifest.json"
+    endpoint="/api/clippi/chat"
+    theme="auto"
+  />
 </body>
 </html>

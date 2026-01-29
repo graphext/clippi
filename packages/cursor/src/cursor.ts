@@ -115,6 +115,21 @@ export class Cursor {
       return
     }
 
+    // Validate element is actually visible and has reasonable dimensions
+    const rect = element.getBoundingClientRect()
+    const style = getComputedStyle(element)
+    const isHidden = style.display === 'none' ||
+                     style.visibility === 'hidden' ||
+                     style.opacity === '0' ||
+                     rect.width === 0 ||
+                     rect.height === 0
+
+    if (isHidden) {
+      // Element exists but is not visible - show tooltip only
+      this.showTooltipOnly(options)
+      return
+    }
+
     this.currentTarget = element
 
     // Check actionability and scroll into view if needed
@@ -127,10 +142,10 @@ export class Cursor {
       }
     }
 
-    // Get element position after potential scroll
-    const rect = element.getBoundingClientRect()
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
+    // Get element position after potential scroll (refresh rect)
+    const finalRect = element.getBoundingClientRect()
+    const centerX = finalRect.left + finalRect.width / 2
+    const centerY = finalRect.top + finalRect.height / 2
 
     // Animate cursor to element
     this.ghostCursor.show()

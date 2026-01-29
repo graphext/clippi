@@ -123,16 +123,18 @@ export class StepSequencer extends EventEmitter {
   private findStartStep(): number {
     const steps = this.getSteps()
 
-    // Search from end to beginning
-    for (let i = steps.length - 1; i >= 0; i--) {
+    // Search from beginning - find first step that is NOT complete
+    for (let i = 0; i < steps.length; i++) {
       const step = steps[i]
-      if (step.success_condition && checkSuccessCondition(step.success_condition)) {
-        this.debug(`Step ${i} already complete, starting at ${i + 1}`)
-        return i + 1 // Start at next step
+      // If no condition or condition not met, start here
+      if (!step.success_condition || !checkSuccessCondition(step.success_condition)) {
+        this.debug(`Starting at step ${i}`)
+        return i
       }
+      this.debug(`Step ${i} already complete, skipping`)
     }
 
-    return 0 // Start from the beginning
+    return steps.length // All steps complete
   }
 
   /**
@@ -194,6 +196,7 @@ export class StepSequencer extends EventEmitter {
     if (step.success_condition) {
       this.observer.start(step.success_condition, {
         onSuccess: () => this.advanceStep(),
+        stepElement: result.element,
       })
     }
 

@@ -9,14 +9,14 @@ export const cursorStyles = `
 
 .clippi-cursor {
   position: fixed;
+  top: 0;
+  left: 0;
   width: 24px;
   height: 24px;
   pointer-events: none;
   z-index: 999999;
-  transform: translate(-2px, -2px);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.2s ease;
   opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
 .clippi-cursor.visible {
@@ -30,8 +30,7 @@ export const cursorStyles = `
 }
 
 .clippi-cursor.animating {
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.2s ease;
+  /* Animation handled by JavaScript */
 }
 
 /* Tooltip */
@@ -161,13 +160,8 @@ export const cursorStyles = `
 /* Reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
-  .clippi-cursor,
   .clippi-tooltip,
   .clippi-highlight {
-    transition: opacity 0.2s ease !important;
-  }
-
-  .clippi-cursor.animating {
     transition: opacity 0.2s ease !important;
   }
 
