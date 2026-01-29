@@ -235,6 +235,37 @@ const conditionFn = new Function('ctx', `return (${element.conditions})(ctx)`)
 const canAccess = conditionFn(await getContext())
 ```
 
+**Security consideration:** `new Function()` evaluates arbitrary code. Manifests must be:
+- Served from same-origin or trusted CDN with SRI (Subresource Integrity)
+- Never derived from user input
+- Validated at build time with `clippi validate`
+
+**Safe DSL alternative (recommended for v0.1):**
+
+For common cases, use the declarative DSL instead of JS functions:
+
+```javascript
+// Instead of: "({ plan }) => plan === 'pro'"
+"conditions": "plan:pro"
+
+// Instead of: "({ permissions }) => permissions.includes('data:export')"
+"conditions": "permission:data:export"
+
+// Instead of: "({ state }) => state.has_data"
+"conditions": "state:has_data"
+
+// Logical AND
+"conditions": "and:[plan:pro,permission:admin]"
+
+// Logical OR
+"conditions": "or:[plan:pro,plan:enterprise]"
+
+// Nested
+"conditions": "and:[or:[plan:pro,plan:enterprise],permission:data:export]"
+```
+
+The DSL covers ~90% of use cases safely. Full JS functions remain available for complex logic but are marked as "advanced" in documentation.
+
 ### 3.6 Initial Step Detection
 
 Before starting a path, we check which steps have already been completed:
@@ -280,6 +311,36 @@ npx clippi build
 # → Generates guide.context.json (reduced version)
 # → Validates selectors
 ```
+
+### 3.9 Manifest Maintenance
+
+**Version tracking:**
+```json
+{
+  "meta": {
+    "version": "2024-01-28-001",
+    "app_version": "2.3.0",
+    "generated_at": "2024-01-28T12:00:00Z"
+  }
+}
+```
+
+**Staleness detection (v1.0):**
+- `clippi validate` in CI catches broken selectors on every deploy
+- Runtime: log selector failures to analytics
+- Dashboard shows "selector health" over time
+
+**Partial regeneration (v1.0):**
+```bash
+npx clippi generate --element export-csv  # Regenerates single flow
+npx clippi generate --category data       # Regenerates category
+```
+Preserves manual edits in other flows.
+
+**Recommended workflow:**
+1. Run `clippi validate` in CI on every deploy
+2. Review selector failure logs weekly
+3. Regenerate broken flows with `clippi generate --element <id>`
 
 ---
 
@@ -351,6 +412,20 @@ Many tasks aren't a single click, but a sequence: open menu → select option �
 
 **MutationObserver** is the key piece here. It's a native browser API that notifies when the DOM changes. We configure it to observe `document.body` with `{ childList: true, subtree: true }`, which gives us visibility of any element that appears or disappears.
 
+**Known limitations:**
+
+| Scenario | Detection Issue | Workaround |
+|----------|-----------------|------------|
+| SPA virtual DOM | May miss if no real DOM change | Use `success_condition.url_contains` |
+| Canvas/WebGL | Elements not in DOM | Manual confirmation fallback |
+| CSS-only state (`:checked`) | Attribute change not detected | Use `success_condition.attribute` |
+| Async race condition | Observer attached after change | Check condition immediately on step start |
+
+**Additional detection strategies:**
+- URL polling (500ms interval) for route changes in SPAs
+- `success_condition.attribute` for form state changes
+- Custom events: app can call `Clippi.confirmStep()` programmatically for complex cases
+
 ### 4.3 Conditions Checker
 
 Not all users can do everything. A user on the free plan can't export to CSV. A user without admin permissions can't delete data. The Conditions Checker verifies these restrictions before guiding.
@@ -411,6 +486,19 @@ sessionStorage.setItem('clippi_session', JSON.stringify({
 
 **Recovery:** When Clippi initializes, it checks if there's a saved session. If there is and it's not too old (configurable, default 30 minutes), it offers to resume: "You were exporting to CSV. Continue where you left off?"
 
+**Configuration:**
+```javascript
+Clippi.init({
+  persistence: {
+    storage: 'session',       // 'session' | 'local' | 'none'
+    ttl: 30 * 60 * 1000,      // 30 minutes (only for localStorage)
+    crossTab: false           // Future: BroadcastChannel sync
+  }
+})
+```
+
+`localStorage` mode is useful for long flows where user might accidentally close the tab. The TTL prevents stale flows from appearing weeks later.
+
 ### 4.5 User Controls
 
 The tooltip that accompanies the cursor needs minimal controls. After several iterations, we decided on a very simple design: just progress indicator and close button.
@@ -448,6 +536,76 @@ The tooltip that accompanies the cursor needs minimal controls. After several it
 **The [2/4] indicator** shows progress: step 2 of 4. This gives the user context of how much is left and reduces anxiety in long flows.
 
 **The ✕ button** cancels the entire flow. It must always be available; we never trap the user in a flow they can't abandon.
+
+### 4.6 Error Handling
+
+**Error taxonomy:**
+
+| Error | Surfaced to | Action |
+|-------|-------------|--------|
+| Selector not found | Developer (console) | Log warning, skip step |
+| Element not actionable | User (tooltip) | Show reason, offer retry |
+| Condition blocked | User (chat) | Show message, suggest alternative |
+| Backend unreachable | User (chat) | "I'm having trouble, try again" |
+| Manifest load failed | Developer (console) | Error with instructions |
+
+**Debug mode:**
+```javascript
+Clippi.init({ debug: true })
+// Logs: selector resolution, actionability checks, condition evaluation, step transitions
+```
+
+**Production logging:**
+- Errors sent to `onError` hook for integration with your error tracking
+- No PII in error payloads
+- Structured format for log aggregation
+
+```javascript
+Clippi.on('error', (error) => {
+  Sentry.captureException(error)
+})
+```
+
+### 4.7 Vision Fallback (v1.0)
+
+**Primary purpose:** Manifest development tool. Identifies gaps in manifest coverage.
+
+**Configuration:**
+```javascript
+Clippi.init({
+  vision: {
+    enabled: false,           // Default: disabled
+    mode: 'development',      // 'development' | 'production'
+    maxPerSession: 5,         // Rate limit per user session
+    logToAnalytics: true      // Track for manifest improvement
+  }
+})
+```
+
+**Development mode:**
+- Enabled by default when `NODE_ENV !== 'production'`
+- Logs all vision queries for manifest gap analysis
+- No rate limiting
+
+**Production mode (opt-in):**
+- Disabled by default
+- Rate limited (maxPerSession)
+- Cost monitoring via `onVisionFallback` hook
+
+```javascript
+Clippi.on('visionFallback', (query, cost) => {
+  analytics.track('clippi_vision_used', { query, cost })
+})
+```
+
+**Target metric:** <5% of queries should hit vision fallback. Higher rates indicate manifest gaps.
+
+**Gap identification workflow:**
+1. Enable vision in development
+2. Run through common user queries
+3. Run `clippi analyze-fallbacks` to generate report of missing flows
+4. Add flows to manifest
+5. Re-test until fallback rate is acceptable
 
 ---
 
@@ -602,6 +760,20 @@ function MyChat() {
 
 **When to use hook vs Web Component:** Use the Web Component if you just want to "add Clippi" without changes to your code. Use the hook if you want to integrate Clippi within an existing UI, or if you need programmatic access to state.
 
+**Framework packages (v1.0):**
+
+| Package | What it provides |
+|---------|------------------|
+| `@clippi/react` | `useClippi` hook, `<ClippiChat />` component |
+| `@clippi/vue` | `useClippi` composable, `<ClippiChat />` component |
+
+These wrap the Web Component with framework-idiomatic APIs:
+- Proper React event handling (no manual `addEventListener`)
+- Vue reactivity integration
+- TypeScript types for props/events
+
+**Web Component remains the core** — framework packages are thin wrappers (~50 lines each). This keeps maintenance burden low while providing first-class DX for the two most popular frameworks.
+
 ### 5.6 Backend Contract
 
 Clippi doesn't include a backend. The developer implements their own endpoint following a simple contract.
@@ -640,6 +812,24 @@ interface Response {
 - **`blocked`:** The user wants to do something but doesn't meet the conditions (plan, permissions, state). Includes the `reason` so Clippi can offer alternatives.
 
 - **`text`:** The LLM determined it's a conversational question, not an action. Includes the response `content`.
+
+**Reference implementation:**
+
+`/examples/backend-node/` provides a working Express server (~150 lines):
+
+- OpenAI/Anthropic/Gemini provider support (configurable)
+- Intent classification prompt
+- Manifest context injection
+- Rate limiting middleware
+- Error handling
+
+```bash
+cd examples/backend-node
+cp .env.example .env  # Add your API key
+npm install && npm start
+```
+
+Developers can use as-is for prototypes or as reference for their own stack (Python, Go, etc.).
 
 ### 5.7 Hooks
 
@@ -850,6 +1040,75 @@ clippi-chat::part(send-button) {
 
 **Warning:** CSS parts give maximum flexibility but users can break the layout. We document them as "advanced" and recommend using CSS variables for most cases.
 
+### 5.10 Testing
+
+**Unit testing Clippi integrations:**
+
+`@clippi/core` exports testing utilities:
+
+```javascript
+import { createMockClippi } from '@clippi/core/testing'
+
+const clippi = createMockClippi({
+  manifest: mockManifest,
+  responses: {
+    'export csv': { action: 'guide', elementId: 'export-csv' }
+  }
+})
+
+// Mock mode skips LLM calls, returns deterministic responses
+await clippi.ask('How do I export to CSV?')
+expect(clippi.currentFlow).toBe('export-csv')
+```
+
+**E2E testing:**
+
+```bash
+npx clippi validate --e2e
+# → Launches headless browser
+# → Runs through each flow in manifest
+# → Records success/failure for each step
+# → Reports broken flows
+```
+
+Integrates with Playwright/Cypress test suites via `@clippi/testing` package.
+
+**Manifest validation levels:**
+- `clippi validate` — selectors exist in DOM
+- `clippi validate --flows` — paths are completable end-to-end
+- `clippi validate --conditions` — condition syntax is valid
+
+### 5.11 Analytics (Optional)
+
+Clippi doesn't include built-in analytics but provides hooks for integration:
+
+```javascript
+Clippi.on('flowStarted', (flow) => {
+  analytics.track('clippi_flow_started', { flowId: flow.id })
+})
+
+Clippi.on('flowCompleted', (flow, duration) => {
+  analytics.track('clippi_flow_completed', { flowId: flow.id, duration })
+})
+
+Clippi.on('flowAbandoned', (flow, step, reason) => {
+  analytics.track('clippi_flow_abandoned', { flowId: flow.id, step, reason })
+})
+
+Clippi.on('fallback', (type, query) => {
+  analytics.track('clippi_fallback', { type, query })  // Track manifest gaps
+})
+```
+
+**Console analytics (development):**
+```javascript
+Clippi.init({ analytics: 'console' })
+// Prints flow metrics to console on session end:
+// - Flows started/completed/abandoned
+// - Average steps per flow
+// - Fallback rate
+```
+
 ---
 
 ## 6. Tech Stack
@@ -1002,6 +1261,23 @@ The agent that automatically generates the manifest uses Browser Use, an open so
 
 **We don't use Browser Use Cloud:** A Browser Use cloud service exists, but we run everything locally. The developer uses their own Gemini/OpenAI/Anthropic API key. This gives total control over costs and privacy.
 
+**Agent abstraction (future-proofing):**
+
+The CLI uses an `AgentProvider` interface to decouple from Browser Use:
+
+```typescript
+interface AgentProvider {
+  generateFlow(task: string, context: AgentContext): Promise<ManifestElement>
+  validateSelector(selector: SelectorStrategy): Promise<boolean>
+}
+```
+
+v1.0 ships with `BrowserUseProvider` as the default. Future providers possible:
+- `PlaywrightAgentProvider` (custom lightweight implementation)
+- Alternative agent frameworks as they emerge
+
+This abstraction protects against Browser Use abandonment or API changes. Switching providers is a config change, not a rewrite.
+
 ---
 
 ## 7. LLM Models (January 2026)
@@ -1059,24 +1335,33 @@ The developer chooses. Clippi only defines the endpoint contract.
 
 ---
 
-## 9. v1 Scope
+## 9. Release Scope
 
-### 9.1 INCLUDED
+### 9.1 Phased Approach
+
+The original v1 scope was too large, risking a half-finished product. We now adopt a phased release:
+
+| Phase | Focus | Risk Level |
+|-------|-------|------------|
+| **v0.1** | Core mechanics, manual manifest | Low - validates fundamentals |
+| **v1.0** | Full automation, fallbacks | Medium - depends on Browser Use reliability |
+| **v2.0** | Execution, hosted options | High - new complexity domains |
+
+### 9.2 v0.1 - Foundation (MVP)
+
+**Goal:** Validate core UX with minimal scope. Developers manually create manifests.
 
 **Setup:**
-- [ ] AI Agent + Browser Use (automated generation)
-- [ ] Chrome extension (manual recording)
-- [ ] Docs/videos as agent context
-- [ ] CLI: init, generate, validate, serve
+- [ ] CLI: `init`, `serve` (dev server with hot reload)
+- [ ] Manual manifest creation (documented schema + examples)
+- [ ] `clippi validate` (selector validation in headless browser)
 
 **Runtime (@clippi/core):**
-- [ ] Manifest matching
-- [ ] Vision fallback
-- [ ] Docs RAG fallback
+- [ ] Manifest matching (local, no LLM)
 - [ ] Actionability checks
 - [ ] Step sequencer + MutationObserver
-- [ ] Conditions (plan, permissions, state)
 - [ ] sessionStorage persistence
+- [ ] Basic conditions (plan, permissions)
 
 **Visual (@clippi/cursor):**
 - [ ] Animated ghost cursor
@@ -1088,14 +1373,57 @@ The developer chooses. Clippi only defines the endpoint contract.
 - [ ] `<clippi-chat />` widget
 - [ ] Headless API
 - [ ] Backend proxy pattern
-- [ ] Event hooks
+- [ ] Event hooks (beforeGuide, stepCompleted, blocked)
 
-### 9.2 EXCLUDED (v2+)
+**Documentation:**
+- [ ] Manifest schema reference
+- [ ] Integration guide (widget, headless, logic-only)
+- [ ] Reference backend implementation (Node.js)
+- [ ] Example app with 5-10 flows
 
+**NOT in v0.1:**
+- No AI agent / Browser Use
+- No Chrome extension
+- No vision fallback
+- No docs RAG fallback
+- No automatic manifest generation
+
+### 9.3 v1.0 - Automation
+
+**Goal:** Reduce manifest creation burden with AI agent. Add fallbacks for coverage gaps.
+
+**Setup:**
+- [ ] AI Agent + Browser Use (automated manifest generation)
+- [ ] Chrome extension (manual recording for edge cases)
+- [ ] CLI: `generate --tasks ./file`
+- [ ] Docs/videos as agent context
+
+**Runtime:**
+- [ ] Vision fallback (screenshot + LLM when no manifest match)
+- [ ] Docs RAG fallback (text response for conceptual questions)
+- [ ] Feature flag conditions
+- [ ] Business state conditions
+
+**Integration:**
+- [ ] `fallback` event hook
+- [ ] Manifest coverage analytics (% queries hitting fallback)
+
+**Metrics for v1.0 readiness:**
+- v0.1 validated with 3+ production users
+- Agent generates correct selectors >80% of the time
+- Vision fallback latency <2s p95
+
+### 9.4 v2.0+ - Future
+
+- Action execution (with explicit confirmation)
 - Native Intercom/Zendesk integrations
 - Hosted LLM service (SaaS model)
-- Consumer AI subscriptions (Claude Pro, etc.) - requires API keys
-- Action execution (guide-only in v1)
+- Local browser LLM for intent classification
+- Cross-tab session persistence (optional localStorage mode)
+- **Internationalization** (i18n for manifest instructions)
+- **Accessibility** (WCAG 2.1 AA, screen readers, keyboard nav)
+- **Mobile/Touch adaptation** (highlight rings, tap-to-confirm)
+- **Offline & degraded network** (manifest caching, graceful degradation)
 
 ---
 
@@ -1306,16 +1634,53 @@ if (window.ai?.languageModel) {
 
 ## 13. Next Steps
 
+### Phase 0: Validation (1-2 weeks)
+
 1. **Code spike** to validate core architecture
+   - Implement actionability checks
+   - Test MutationObserver reliability across frameworks (React, Vue, vanilla)
+   - Validate cursor positioning edge cases
 2. **Buy domain** clippi.net
 3. **Setup monorepo** with pnpm workspaces
-4. **Implement** in order:
-   - Core library (actionability, cursor, step sequencer)
-   - Basic CLI (init, serve)
-   - Chrome extension
-   - Agent + Browser Use
-5. **Initial documentation**
-6. **Integration examples**
+
+### Phase 1: v0.1 Development
+
+4. **Core packages** (in order):
+   - `@clippi/core` - manifest parser, conditions, step sequencer, persistence
+   - `@clippi/cursor` - ghost cursor, tooltips, highlights
+   - `@clippi/chat` - widget Web Component, headless API
+   - `@clippi/cli` - init, serve, validate commands
+
+5. **Documentation & examples**:
+   - Manifest schema reference with JSON Schema
+   - Integration guide for each level (widget → headless → logic-only)
+   - Reference backend implementation (Node.js + Express)
+   - Example app demonstrating 5-10 common flows
+
+6. **Validation**:
+   - Internal dogfooding
+   - 3+ beta users in production
+   - Gather feedback on manifest authoring pain points
+
+### Phase 2: v1.0 Development
+
+7. **Automation tooling**:
+   - Chrome extension for manual recording
+   - AI Agent + Browser Use integration
+   - CLI `generate` command
+
+8. **Fallback systems**:
+   - Vision fallback implementation
+   - Docs RAG integration
+   - Coverage analytics
+
+### Success Criteria for v0.1 Launch
+
+- [ ] Core runtime works in React, Vue, and vanilla JS apps
+- [ ] Widget renders correctly across Chrome, Firefox, Safari
+- [ ] Step sequencer handles 90%+ of common UI patterns
+- [ ] Documentation sufficient for self-service integration
+- [ ] At least one production deployment validated
 
 ---
 
@@ -1331,7 +1696,102 @@ if (window.ai?.languageModel) {
 
 ---
 
-## Appendix B: Glossary
+## Appendix B: v2 Feature Specifications
+
+These features are planned for v2.0+ and are documented here for future reference.
+
+### B.1 Internationalization
+
+**Manifest instructions support i18n:**
+```json
+{
+  "instruction": "Click Export",
+  "instruction_i18n": {
+    "es": "Haz clic en Exportar",
+    "fr": "Cliquez sur Exporter",
+    "de": "Klicken Sie auf Exportieren"
+  }
+}
+```
+
+**Runtime configuration:**
+```javascript
+Clippi.init({ locale: 'es' })  // Or detect from navigator.language
+```
+
+Falls back to `instruction` if locale not found.
+
+**Keywords already support multiple languages** — include translations directly in the keywords array:
+```json
+"keywords": ["export", "download", "csv", "exportar", "descargar"]
+```
+
+### B.2 Mobile Adaptation
+
+On touch devices (detected via `'ontouchstart' in window` or `navigator.maxTouchPoints > 0`):
+
+**Visual changes:**
+- No ghost cursor (there's no cursor on mobile)
+- Target element gets pulsing highlight ring
+- Tooltip anchored to element, not cursor position
+- Larger touch targets for tooltip controls (min 44×44px)
+
+**Interaction changes:**
+- Tap target to confirm step (vs click-through on desktop)
+- Swipe down on tooltip to dismiss flow
+- Pull-to-refresh doesn't interfere with flows
+
+**Viewport handling:**
+- Auto-scroll to bring target into view with padding
+- Respect `viewport-fit=cover` for notched devices
+- Handle keyboard appearing/disappearing during flows
+
+### B.3 Accessibility
+
+**Screen reader support:**
+- Cursor position announced via `aria-live="polite"` region
+- Step instructions read aloud: "Step 2 of 4: Click the Export button"
+- Flow completion announced: "Guide complete"
+- Error states announced
+
+**Keyboard navigation:**
+- `Escape` cancels current flow at any time
+- `Tab` focuses the current target element
+- `Enter` on tooltip confirms step (alternative to clicking target)
+- Chat widget fully keyboard navigable (Tab through messages, Enter to send)
+
+**Reduced motion:**
+- Respects `prefers-reduced-motion` media query
+- Cursor teleports instead of animating
+- No pulsing, bouncing, or continuous animation effects
+- Highlight fades are instant
+
+**WCAG 2.1 AA compliance targets:**
+- Color contrast ratio ≥4.5:1 for text, ≥3:1 for UI components
+- Focus indicators visible on all interactive elements
+- No information conveyed by color alone
+- Touch targets minimum 44×44px
+
+### B.4 Offline & Degraded Network
+
+**Manifest caching:**
+- Manifest cached in `localStorage` after first successful load
+- Stale-while-revalidate pattern: use cache, fetch update in background
+- Works offline for manifest-matched queries (no LLM needed)
+
+**Backend unreachable:**
+- Local manifest matching still works
+- Vision fallback disabled
+- User sees: "I can help with common tasks. For other questions, please check your connection."
+
+**Slow connection:**
+- Loading states in chat UI (typing indicator)
+- Timeout after 10s with retry option
+- Graceful degradation: partial responses displayed as they arrive
+
+---
+
+## Appendix C: Glossary
 
 | Term | Definition |
 |------|------------|
