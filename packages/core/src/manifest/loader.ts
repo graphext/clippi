@@ -1,4 +1,4 @@
-import type { Manifest, ManifestContext, ManifestContextElement } from '../types/manifest.js'
+import type { Manifest, ManifestContext, ManifestContextTarget } from '../types/manifest.js'
 
 /**
  * Load manifest from URL or object
@@ -27,15 +27,15 @@ export async function loadManifest(source: string | object): Promise<Manifest> {
  * @returns Reduced manifest context
  */
 export function generateContext(manifest: Manifest): ManifestContext {
-  const elements: ManifestContextElement[] = manifest.elements.map((el) => ({
-    id: el.id,
-    label: el.label,
-    description: el.description,
-    keywords: el.keywords,
-    category: el.category,
+  const targets: ManifestContextTarget[] = manifest.targets.map((t) => ({
+    id: t.id,
+    label: t.label,
+    description: t.description,
+    keywords: t.keywords,
+    category: t.category,
   }))
 
-  return { elements }
+  return { targets }
 }
 
 /**
@@ -53,14 +53,14 @@ export function validateManifest(manifest: unknown): { valid: boolean; errors: s
 
   const m = manifest as Record<string, unknown>
 
-  if (!Array.isArray(m.elements)) {
-    errors.push('Manifest must have an "elements" array')
+  if (!Array.isArray(m.targets)) {
+    errors.push('Manifest must have a "targets" array')
     return { valid: false, errors }
   }
 
-  for (let i = 0; i < m.elements.length; i++) {
-    const el = m.elements[i] as Record<string, unknown>
-    const prefix = `elements[${i}]`
+  for (let i = 0; i < m.targets.length; i++) {
+    const el = m.targets[i] as Record<string, unknown>
+    const prefix = `targets[${i}]`
 
     if (!el.id || typeof el.id !== 'string') {
       errors.push(`${prefix}: Missing or invalid "id"`)

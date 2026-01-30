@@ -5,7 +5,7 @@ import {
   parseCondition,
   ConditionParseError,
   type Manifest,
-  type ManifestElement,
+  type ManifestTarget,
 } from '@clippi/core'
 
 /**
@@ -28,19 +28,19 @@ interface ValidationResult {
 }
 
 /**
- * Validate condition syntax for an element
+ * Validate condition syntax for a target
  */
-function validateConditions(element: ManifestElement): string[] {
+function validateConditions(target: ManifestTarget): string[] {
   const errors: string[] = []
 
-  if (element.conditions) {
+  if (target.conditions) {
     try {
-      parseCondition(element.conditions)
+      parseCondition(target.conditions)
     } catch (error) {
       if (error instanceof ConditionParseError) {
-        errors.push(`${element.id}: Invalid condition - ${error.message}`)
+        errors.push(`${target.id}: Invalid condition - ${error.message}`)
       } else {
-        errors.push(`${element.id}: Invalid condition - ${error}`)
+        errors.push(`${target.id}: Invalid condition - ${error}`)
       }
     }
   }
@@ -49,15 +49,15 @@ function validateConditions(element: ManifestElement): string[] {
 }
 
 /**
- * Validate selector strategies for an element
+ * Validate selector strategies for a target
  */
-function validateSelectors(element: ManifestElement): string[] {
+function validateSelectors(target: ManifestTarget): string[] {
   const errors: string[] = []
   const warnings: string[] = []
 
-  const { selector } = element
+  const { selector } = target
   if (!selector || !selector.strategies || selector.strategies.length === 0) {
-    errors.push(`${element.id}: No selector strategies defined`)
+    errors.push(`${target.id}: No selector strategies defined`)
     return errors
   }
 
@@ -66,13 +66,13 @@ function validateSelectors(element: ManifestElement): string[] {
   const hasAria = selector.strategies.some((s) => s.type === 'aria')
 
   if (!hasTestId && !hasAria) {
-    warnings.push(`${element.id}: Consider adding testId or aria selector for stability`)
+    warnings.push(`${target.id}: Consider adding testId or aria selector for stability`)
   }
 
   // Validate each strategy
   for (const strategy of selector.strategies) {
     if (!strategy.value || strategy.value.trim() === '') {
-      errors.push(`${element.id}: Empty value in ${strategy.type} selector`)
+      errors.push(`${target.id}: Empty value in ${strategy.type} selector`)
     }
 
     if (strategy.type === 'css') {
@@ -82,7 +82,7 @@ function validateSelectors(element: ManifestElement): string[] {
           document.querySelector(strategy.value)
         }
       } catch {
-        errors.push(`${element.id}: Invalid CSS selector "${strategy.value}"`)
+        errors.push(`${target.id}: Invalid CSS selector "${strategy.value}"`)
       }
     }
   }
@@ -91,39 +91,39 @@ function validateSelectors(element: ManifestElement): string[] {
 }
 
 /**
- * Validate path steps for an element
+ * Validate path steps for a target
  */
-function validatePath(element: ManifestElement): string[] {
+function validatePath(target: ManifestTarget): string[] {
   const errors: string[] = []
 
-  if (!element.path || element.path.length === 0) {
+  if (!target.path || target.path.length === 0) {
     return errors // Path is optional
   }
 
   let hasFinal = false
-  for (let i = 0; i < element.path.length; i++) {
-    const step = element.path[i]
+  for (let i = 0; i < target.path.length; i++) {
+    const step = target.path[i]
 
     if (!step.selector || !step.selector.strategies || step.selector.strategies.length === 0) {
-      errors.push(`${element.id}: Path step ${i + 1} has no selector`)
+      errors.push(`${target.id}: Path step ${i + 1} has no selector`)
     }
 
     if (!step.instruction || step.instruction.trim() === '') {
-      errors.push(`${element.id}: Path step ${i + 1} has no instruction`)
+      errors.push(`${target.id}: Path step ${i + 1} has no instruction`)
     }
 
     if (step.final) {
       if (hasFinal) {
-        errors.push(`${element.id}: Multiple steps marked as final`)
+        errors.push(`${target.id}: Multiple steps marked as final`)
       }
       hasFinal = true
     }
   }
 
   // Last step should be final
-  const lastStep = element.path[element.path.length - 1]
+  const lastStep = target.path[target.path.length - 1]
   if (!lastStep.final) {
-    errors.push(`${element.id}: Last path step should be marked as final`)
+    errors.push(`${target.id}: Last path step should be marked as final`)
   }
 
   return errors
@@ -164,10 +164,10 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
     result.errors.push(...schemaValidation.errors)
   }
 
-  // Validate each element
-  for (const element of manifest.elements) {
+  // Validate each target
+  for (const target of manifest.targets) {
     // Validate selectors
-    const selectorIssues = validateSelectors(element)
+    const selectorIssues = validateSelectors(target)
     for (const issue of selectorIssues) {
       if (issue.includes('Consider')) {
         result.warnings.push(issue)
@@ -179,7 +179,7 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
 
     // Validate conditions (if --conditions flag)
     if (options.conditions) {
-      const conditionErrors = validateConditions(element)
+      const conditionErrors = validateConditions(target)
       if (conditionErrors.length > 0) {
         result.errors.push(...conditionErrors)
         result.valid = false
@@ -188,7 +188,7 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
 
     // Validate paths (if --flows flag)
     if (options.flows) {
-      const pathErrors = validatePath(element)
+      const pathErrors = validatePath(target)
       if (pathErrors.length > 0) {
         result.errors.push(...pathErrors)
         result.valid = false
@@ -197,11 +197,11 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
   }
 
   // Check for duplicate IDs
-  const ids = manifest.elements.map((e) => e.id)
+  const ids = manifest.targets.map((t) => t.id)
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   if (duplicates.length > 0) {
     result.valid = false
-    result.errors.push(`Duplicate element IDs: ${[...new Set(duplicates)].join(', ')}`)
+    result.errors.push(`Duplicate target IDs: ${[...new Set(duplicates)].join(', ')}`)
   }
 
   // Print results
@@ -219,7 +219,7 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
 
   // Summary
   console.log(`📊 Summary:`)
-  console.log(`   - Elements: ${manifest.elements.length}`)
+  console.log(`   - Targets: ${manifest.targets.length}`)
   console.log(`   - Errors: ${result.errors.length}`)
   console.log(`   - Warnings: ${result.warnings.length}`)
   console.log('')

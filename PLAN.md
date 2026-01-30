@@ -101,10 +101,10 @@ Modern SaaS applications add chatbots that are essentially documentation RAGs. W
     "timeout_ms": 10000  // Global for all paths
   },
   
-  "elements": [
+  "targets": [
     {
       "id": "export-csv",
-      
+
       // Selectors with fallback strategy (priority order)
       "selector": {
         "strategies": [
@@ -172,7 +172,7 @@ Reduced version sent to the model. **Auto-generated** by CLI from the manifest.
 
 ```javascript
 {
-  "elements": [
+  "targets": [
     {
       "id": "export-csv",
       "label": "Export to CSV",
@@ -793,12 +793,12 @@ Clippi doesn't include a backend. The developer implements their own endpoint fo
 interface Request {
   messages: Message[]      // Conversation history
   context: UserContext     // Plan, permissions, state
-  manifest: ManifestElement[]  // Guidable elements (reduced version)
+  manifest: ManifestTarget[]  // Guidable targets (reduced version)
 }
 
 interface Response {
   action: 'guide' | 'blocked' | 'text'
-  elementId?: string      // For 'guide': which element to show
+  targetId?: string       // For 'guide': which target to show
   instruction?: string    // For 'guide': what to tell the user
   reason?: BlockedReason  // For 'blocked': why they can't
   content?: string        // For 'text': conversational response
@@ -1795,7 +1795,7 @@ On touch devices (detected via `'ontouchstart' in window` or `navigator.maxTouch
 
 | Term | Definition |
 |------|------------|
-| **Manifest** | JSON file defining guidable elements, their selectors, and conditions |
+| **Manifest** | JSON file defining guidable targets, their selectors, and conditions |
 | **Actionability** | Verification that an element is visible, enabled, and clickable |
 | **Step Sequencer** | Module that manages multi-step flows and transitions |
 | **Vision Fallback** | Using screenshot + LLM when manifest has no match |

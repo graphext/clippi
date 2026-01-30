@@ -11,7 +11,7 @@ export const manifestTemplate = `{
   "defaults": {
     "timeout_ms": 10000
   },
-  "elements": [
+  "targets": [
     {
       "id": "example-button",
       "selector": {

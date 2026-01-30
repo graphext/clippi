@@ -1,12 +1,12 @@
-import type { ManifestElement, PathStep } from './manifest.js'
+import type { ManifestTarget, PathStep } from './manifest.js'
 import type { ConditionResult } from './conditions.js'
 
 /**
  * Information about the current step being guided
  */
 export interface StepInfo {
-  /** The manifest element being guided to */
-  element: ManifestElement
+  /** The manifest target being guided to */
+  target: ManifestTarget
   /** Current step index (0-based) */
   stepIndex: number
   /** Total number of steps */
@@ -23,10 +23,10 @@ export interface StepInfo {
  * Information about a flow (multi-step guidance)
  */
 export interface FlowInfo {
-  /** The manifest element ID */
-  elementId: string
-  /** The manifest element */
-  element: ManifestElement
+  /** The manifest target ID */
+  targetId: string
+  /** The manifest target */
+  target: ManifestTarget
   /** When the flow started */
   startedAt: number
 }
@@ -35,7 +35,7 @@ export interface FlowInfo {
  * Event types and their payloads
  */
 export interface ClippiEvents {
-  /** Before starting to guide to an element */
+  /** Before starting to guide to a target */
   beforeGuide: (step: StepInfo) => void
   /** After a step is completed */
   stepCompleted: (step: StepInfo) => void
@@ -46,7 +46,7 @@ export interface ClippiEvents {
   /** When a flow is abandoned/cancelled */
   flowAbandoned: (flow: FlowInfo, step: StepInfo, reason: string) => void
   /** When access is blocked due to conditions */
-  blocked: (element: ManifestElement, result: ConditionResult) => void
+  blocked: (target: ManifestTarget, result: ConditionResult) => void
   /** When a fallback is used (vision or docs) */
   fallback: (type: 'vision' | 'docs', query: string) => void
   /** When an error occurs */

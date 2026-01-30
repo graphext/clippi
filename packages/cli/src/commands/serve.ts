@@ -19,21 +19,21 @@ function mockChatResponse(manifest: Manifest, query: string): object {
   // Simple keyword matching for demo
   const queryLower = query.toLowerCase()
 
-  for (const element of manifest.elements) {
-    const keywords = [...element.keywords, element.label.toLowerCase()]
+  for (const target of manifest.targets) {
+    const keywords = [...target.keywords, target.label.toLowerCase()]
     const match = keywords.some(kw => queryLower.includes(kw.toLowerCase()))
     if (match) {
       return {
         action: 'guide',
-        elementId: element.id,
-        instruction: element.description,
+        targetId: target.id,
+        instruction: target.description,
       }
     }
   }
 
   return {
     action: 'text',
-    content: `I couldn't find a specific guide for "${query}". Try asking about: ${manifest.elements.map(e => e.label).join(', ')}`,
+    content: `I couldn't find a specific guide for "${query}". Try asking about: ${manifest.targets.map(t => t.label).join(', ')}`,
   }
 }
 
@@ -74,7 +74,7 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
       }
 
       context = generateContext(manifest)
-      console.log(`✅ Loaded manifest with ${manifest.elements.length} elements`)
+      console.log(`✅ Loaded manifest with ${manifest.targets.length} targets`)
     } catch (error) {
       console.error(`❌ Failed to load manifest: ${error}`)
     }
@@ -168,9 +168,9 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
     <li><code>POST /api/clippi/chat</code> - Mock chat endpoint</li>
   </ul>
 
-  <h2>Elements (${manifest.elements.length})</h2>
+  <h2>Targets (${manifest.targets.length})</h2>
   <ul>
-    ${manifest.elements.map(e => `<li><strong>${e.label}</strong> (${e.id})</li>`).join('\n    ')}
+    ${manifest.targets.map(t => `<li><strong>${t.label}</strong> (${t.id})</li>`).join('\n    ')}
   </ul>
 
   <h2>Usage</h2>

@@ -122,6 +122,11 @@ export const chatStyles = `
   color: var(--clippi-foreground);
 }
 
+.clippi-header-close svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* Messages */
 .clippi-messages {
   flex: 1;

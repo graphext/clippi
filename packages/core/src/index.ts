@@ -59,6 +59,6 @@ export {
   matchByQuery,
   findBestMatch,
   findByCategory,
-  getContextElements,
+  getContextTargets,
   type MatchResult,
 } from './manifest/index.js'

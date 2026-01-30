@@ -1,4 +1,4 @@
-import type { Manifest, ManifestElement } from '../types/manifest.js'
+import type { Manifest, ManifestTarget } from '../types/manifest.js'
 import type { UserContext } from '../types/conditions.js'
 import type { ChatResponse } from '../types/config.js'
 import type { StepInfo, FlowInfo } from '../types/events.js'
@@ -11,7 +11,7 @@ import { evaluateCondition } from '../conditions/evaluator.js'
  */
 export interface MockResponse {
   action: 'guide' | 'blocked' | 'text'
-  elementId?: string
+  targetId?: string
   instruction?: string
   content?: string
 }
@@ -66,30 +66,30 @@ export class MockClippi extends EventEmitter {
   }
 
   /**
-   * Guide to a specific element by ID
+   * Guide to a specific target by ID
    *
-   * @param elementId Element ID to guide to
-   * @returns Element or null if not found/blocked
+   * @param targetId Target ID to guide to
+   * @returns Target or null if not found/blocked
    */
-  async guide(elementId: string): Promise<ManifestElement | null> {
-    const element = findById(this.manifest, elementId)
-    if (!element) {
+  async guide(targetId: string): Promise<ManifestTarget | null> {
+    const target = findById(this.manifest, targetId)
+    if (!target) {
       return null
     }
 
     // Check conditions
-    if (element.conditions) {
-      const result = evaluateCondition(element.conditions, this.context)
+    if (target.conditions) {
+      const result = evaluateCondition(target.conditions, this.context)
       if (!result.allowed) {
-        this.emit('blocked', element, result)
+        this.emit('blocked', target, result)
         return null
       }
     }
 
     // Start flow
     this.currentFlow = {
-      elementId: element.id,
-      element,
+      targetId: target.id,
+      target,
       startedAt: Date.now(),
     }
     this.currentStep = 0
@@ -97,9 +97,9 @@ export class MockClippi extends EventEmitter {
     this.emit('flowStarted', this.currentFlow)
 
     // Emit step event
-    const steps = element.path ?? [{ selector: element.selector, instruction: `Click on ${element.label}`, final: true }]
+    const steps = target.path ?? [{ selector: target.selector, instruction: `Click on ${target.label}`, final: true }]
     const stepInfo: StepInfo = {
-      element,
+      target,
       stepIndex: 0,
       totalSteps: steps.length,
       step: steps[0],
@@ -114,7 +114,7 @@ export class MockClippi extends EventEmitter {
       for (let i = 0; i < steps.length; i++) {
         this.currentStep = i
         const info: StepInfo = {
-          element,
+          target,
           stepIndex: i,
           totalSteps: steps.length,
           step: steps[i],
@@ -124,11 +124,11 @@ export class MockClippi extends EventEmitter {
         this.emit('stepCompleted', info)
       }
 
-      this.emit('flowCompleted', this.currentFlow, Date.now() - this.currentFlow.startedAt)
+      this.emit('flowCompleted', this.currentFlow!, Date.now() - this.currentFlow!.startedAt)
       this.currentFlow = null
     }
 
-    return element
+    return target
   }
 
   /**
@@ -142,35 +142,35 @@ export class MockClippi extends EventEmitter {
     const normalizedQuery = query.toLowerCase().trim()
     const predefinedResponse = this.responses[normalizedQuery] ?? this.responses[query]
     if (predefinedResponse) {
-      if (predefinedResponse.action === 'guide' && predefinedResponse.elementId) {
-        await this.guide(predefinedResponse.elementId)
+      if (predefinedResponse.action === 'guide' && predefinedResponse.targetId) {
+        await this.guide(predefinedResponse.targetId)
       }
       return predefinedResponse as ChatResponse
     }
 
     // Try to match against manifest
-    const element = findBestMatch(this.manifest, query)
-    if (element) {
+    const target = findBestMatch(this.manifest, query)
+    if (target) {
       // Check conditions
-      if (element.conditions) {
-        const result = evaluateCondition(element.conditions, this.context)
+      if (target.conditions) {
+        const result = evaluateCondition(target.conditions, this.context)
         if (!result.allowed) {
           return {
             action: 'blocked',
             reason: {
               type: result.reason ?? 'permission',
               missing: result.missing,
-              message: result.message ?? element.on_blocked?.message,
+              message: result.message ?? target.on_blocked?.message,
             },
           }
         }
       }
 
-      await this.guide(element.id)
+      await this.guide(target.id)
       return {
         action: 'guide',
-        elementId: element.id,
-        instruction: element.description,
+        targetId: target.id,
+        instruction: target.description,
       }
     }
 
@@ -187,11 +187,11 @@ export class MockClippi extends EventEmitter {
    */
   cancel(): void {
     if (this.currentFlow) {
-      const steps = this.currentFlow.element.path ?? [
-        { selector: this.currentFlow.element.selector, instruction: '', final: true },
+      const steps = this.currentFlow.target.path ?? [
+        { selector: this.currentFlow.target.selector, instruction: '', final: true },
       ]
       const stepInfo: StepInfo = {
-        element: this.currentFlow.element,
+        target: this.currentFlow.target,
         stepIndex: this.currentStep,
         totalSteps: steps.length,
         step: steps[this.currentStep],

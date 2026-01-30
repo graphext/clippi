@@ -1,9 +1,9 @@
-import type { Manifest, ManifestElement } from './types/manifest.js'
+import type { Manifest, ManifestTarget } from './types/manifest.js'
 import type { UserContext } from './types/conditions.js'
 import type { ClippiConfig, ChatRequest, ChatResponse, ChatMessage } from './types/config.js'
 import type { StepInfo, FlowInfo } from './types/events.js'
 import { EventEmitter } from './events/emitter.js'
-import { loadManifest, getContextElements, findById, findBestMatch } from './manifest/index.js'
+import { loadManifest, getContextTargets, findById, findBestMatch } from './manifest/index.js'
 import { evaluateCondition } from './conditions/index.js'
 import { StepSequencer, type SequencerConfig } from './sequencer/index.js'
 import { createPersistence, type SessionPersistence, type NullPersistence } from './persistence/session-storage.js'
@@ -86,7 +86,7 @@ export class Clippi extends EventEmitter {
       // Load manifest
       this.log('Loading manifest...')
       this.manifest = await loadManifest(config.manifest)
-      this.log(`Loaded ${this.manifest.elements.length} elements`)
+      this.log(`Loaded ${this.manifest.targets.length} targets`)
 
       // Set up persistence
       const persistenceType = config.persistence?.storage ?? 'session'
@@ -116,7 +116,7 @@ export class Clippi extends EventEmitter {
       // Forward sequencer events
       this.sequencer.on('flowStarted', (flow) => {
         this.persistence?.save({
-          flowId: flow.elementId,
+          flowId: flow.targetId,
           currentStep: 0,
           startedAt: flow.startedAt,
         })
@@ -151,16 +151,16 @@ export class Clippi extends EventEmitter {
     const session = this.persistence.load()
     if (!session) return
 
-    const element = findById(this.manifest, session.flowId)
-    if (!element) {
+    const target = findById(this.manifest, session.flowId)
+    if (!target) {
       this.persistence.clear()
       return
     }
 
     this.log(`Found saved session for ${session.flowId} at step ${session.currentStep}`)
     this.emit('sessionRecovered', {
-      elementId: element.id,
-      element,
+      targetId: target.id,
+      target,
       startedAt: session.startedAt,
     }, session.currentStep)
   }
@@ -174,34 +174,34 @@ export class Clippi extends EventEmitter {
   }
 
   /**
-   * Guide to a specific element by ID
+   * Guide to a specific target by ID
    *
-   * @param elementId Element ID from manifest
-   * @returns Element if found and allowed, null otherwise
+   * @param targetId Target ID from manifest
+   * @returns Target if found and allowed, null otherwise
    */
-  async guide(elementId: string): Promise<ManifestElement | null> {
+  async guide(targetId: string): Promise<ManifestTarget | null> {
     this.ensureReady()
 
-    const element = findById(this.manifest!, elementId)
-    if (!element) {
-      this.log(`Element not found: ${elementId}`)
+    const target = findById(this.manifest!, targetId)
+    if (!target) {
+      this.log(`Target not found: ${targetId}`)
       return null
     }
 
     // Check conditions
-    if (element.conditions) {
+    if (target.conditions) {
       const context = await this.getContext()
-      const result = evaluateCondition(element.conditions, context)
+      const result = evaluateCondition(target.conditions, context)
       if (!result.allowed) {
-        this.log(`Access blocked for ${elementId}`, result)
-        this.emit('blocked', element, result)
+        this.log(`Access blocked for ${targetId}`, result)
+        this.emit('blocked', target, result)
         return null
       }
     }
 
     // Start the sequencer
-    this.sequencer!.start(element)
-    return element
+    this.sequencer!.start(target)
+    return target
   }
 
   /**
@@ -225,16 +225,16 @@ export class Clippi extends EventEmitter {
         ? response.content ?? ''
         : response.action === 'blocked'
         ? response.reason?.message ?? 'Access blocked'
-        : `Guiding you to ${response.elementId}`
+        : `Guiding you to ${response.targetId}`
       this.messages.push({ role: 'assistant', content })
 
       // Handle guide response
-      if (response.action === 'guide' && response.elementId) {
-        await this.guide(response.elementId)
+      if (response.action === 'guide' && response.targetId) {
+        await this.guide(response.targetId)
       } else if (response.action === 'blocked') {
-        const element = response.elementId ? findById(this.manifest!, response.elementId) : null
-        if (element) {
-          this.emit('blocked', element, {
+        const target = response.targetId ? findById(this.manifest!, response.targetId) : null
+        if (target) {
+          this.emit('blocked', target, {
             allowed: false,
             reason: response.reason?.type,
             missing: response.reason?.missing,
@@ -247,35 +247,35 @@ export class Clippi extends EventEmitter {
     }
 
     // Local matching fallback
-    const element = findBestMatch(this.manifest!, query)
-    if (element) {
+    const target = findBestMatch(this.manifest!, query)
+    if (target) {
       // Check conditions
-      if (element.conditions) {
+      if (target.conditions) {
         const context = await this.getContext()
-        const result = evaluateCondition(element.conditions, context)
+        const result = evaluateCondition(target.conditions, context)
         if (!result.allowed) {
           const response: ChatResponse = {
             action: 'blocked',
-            elementId: element.id,
+            targetId: target.id,
             reason: {
               type: result.reason ?? 'permission',
               missing: result.missing,
-              message: result.message ?? element.on_blocked?.message,
+              message: result.message ?? target.on_blocked?.message,
             },
           }
           this.messages.push({ role: 'assistant', content: result.message ?? 'Access blocked' })
-          this.emit('blocked', element, result)
+          this.emit('blocked', target, result)
           return response
         }
       }
 
-      await this.guide(element.id)
+      await this.guide(target.id)
       const response: ChatResponse = {
         action: 'guide',
-        elementId: element.id,
-        instruction: element.description,
+        targetId: target.id,
+        instruction: target.description,
       }
-      this.messages.push({ role: 'assistant', content: element.description })
+      this.messages.push({ role: 'assistant', content: target.description })
       return response
     }
 
@@ -301,7 +301,7 @@ export class Clippi extends EventEmitter {
     const request: ChatRequest = {
       messages: this.messages,
       context,
-      manifest: getContextElements(this.manifest!),
+      manifest: getContextTargets(this.manifest!),
     }
 
     const response = await fetch(this.config.llm.endpoint, {

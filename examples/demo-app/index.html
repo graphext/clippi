@@ -338,6 +338,13 @@
       background: #e5e7eb;
       margin: 4px 0;
     }
+
+    /* Settings tabs */
+    .settings-tab.active {
+      background: #6366f1 !important;
+      color: white !important;
+      border-color: #6366f1 !important;
+    }
   </style>
 </head>
 <body>
@@ -462,6 +469,123 @@
     </div>
   </div>
 
+  <!-- Import Modal -->
+  <div class="modal-overlay" id="import-modal">
+    <div class="modal" role="dialog" aria-labelledby="import-modal-title">
+      <div class="modal-header">
+        <h2 class="modal-title" id="import-modal-title">Import Data</h2>
+        <button class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Source</label>
+          <select class="form-select" data-testid="import-source">
+            <option value="">Select source...</option>
+            <option value="file">Upload File</option>
+            <option value="url">From URL</option>
+            <option value="database">Database Connection</option>
+          </select>
+        </div>
+        <div class="form-group" id="import-file-group" style="display: none;">
+          <label class="form-label">File</label>
+          <input type="file" class="form-input" data-testid="import-file" accept=".csv,.xlsx,.json" />
+        </div>
+        <div class="form-group" id="import-url-group" style="display: none;">
+          <label class="form-label">URL</label>
+          <input type="text" class="form-input" data-testid="import-url" placeholder="https://..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dataset Name</label>
+          <input type="text" class="form-input" data-testid="import-name" placeholder="Enter dataset name..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" data-testid="import-overwrite" /> Overwrite existing data
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-testid="import-cancel">Cancel</button>
+        <button class="btn btn-primary" data-testid="import-confirm" disabled>Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal" role="dialog" aria-labelledby="settings-modal-title" style="width: 600px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="settings-modal-title">Settings</h2>
+        <button class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px;">
+          <button class="btn btn-secondary settings-tab active" data-tab="general" data-testid="settings-tab-general" style="padding: 8px 16px;">General</button>
+          <button class="btn btn-secondary settings-tab" data-tab="notifications" data-testid="settings-tab-notifications" style="padding: 8px 16px;">Notifications</button>
+          <button class="btn btn-secondary settings-tab" data-tab="api" data-testid="settings-tab-api" style="padding: 8px 16px;">API Keys</button>
+        </div>
+        <div class="settings-content" id="settings-general">
+          <div class="form-group">
+            <label class="form-label">Theme</label>
+            <select class="form-select" data-testid="settings-theme">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="auto">System</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Language</label>
+            <select class="form-select" data-testid="settings-language">
+              <option value="en">English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Timezone</label>
+            <select class="form-select" data-testid="settings-timezone">
+              <option value="utc">UTC</option>
+              <option value="local">Local</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-content" id="settings-notifications" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" data-testid="settings-email-notifications" checked /> Email notifications
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" data-testid="settings-push-notifications" /> Push notifications
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Digest Frequency</label>
+            <select class="form-select" data-testid="settings-digest">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="never">Never</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-content" id="settings-api" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">API Key</label>
+            <input type="text" class="form-input" data-testid="settings-api-key" value="sk-demo-xxxxx" readonly style="font-family: monospace;" />
+          </div>
+          <div class="form-group">
+            <button class="btn btn-secondary" data-testid="settings-regenerate-key">Regenerate Key</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-testid="settings-cancel">Cancel</button>
+        <button class="btn btn-primary" data-testid="settings-save">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Create Dataset Modal -->
   <div class="modal-overlay" id="create-modal">
     <div class="modal" role="dialog" aria-labelledby="create-modal-title">
@@ -533,6 +657,84 @@
         userDropdown?.classList.remove('open')
       }
     })
+
+    // Import modal
+    const importBtn = document.querySelector('[data-testid="import-btn"]')
+    const importModal = document.getElementById('import-modal')
+    const importSource = document.querySelector('[data-testid="import-source"]')
+    const importFileGroup = document.getElementById('import-file-group')
+    const importUrlGroup = document.getElementById('import-url-group')
+    const importName = document.querySelector('[data-testid="import-name"]')
+    const importConfirm = document.querySelector('[data-testid="import-confirm"]')
+
+    importBtn?.addEventListener('click', () => {
+      importModal.classList.add('open')
+    })
+
+    importModal?.addEventListener('click', (e) => {
+      if (e.target === importModal || e.target.closest('.modal-close') || e.target.closest('[data-testid="import-cancel"]')) {
+        importModal.classList.remove('open')
+        // Reset form
+        importSource.value = ''
+        importFileGroup.style.display = 'none'
+        importUrlGroup.style.display = 'none'
+        importName.value = ''
+        importConfirm.disabled = true
+      }
+    })
+
+    // Show/hide fields based on source selection
+    importSource?.addEventListener('change', () => {
+      importFileGroup.style.display = importSource.value === 'file' ? 'block' : 'none'
+      importUrlGroup.style.display = importSource.value === 'url' ? 'block' : 'none'
+      validateImportForm()
+    })
+
+    // Validate import form
+    function validateImportForm() {
+      const hasSource = importSource.value !== ''
+      const hasName = importName.value.trim() !== ''
+      importConfirm.disabled = !(hasSource && hasName)
+    }
+
+    importName?.addEventListener('input', validateImportForm)
+
+    // Settings modal
+    const settingsBtn = document.querySelector('[data-testid="nav-settings"]')
+    const settingsModal = document.getElementById('settings-modal')
+    const settingsTabs = document.querySelectorAll('.settings-tab')
+    const settingsContents = document.querySelectorAll('.settings-content')
+
+    settingsBtn?.addEventListener('click', (e) => {
+      e.preventDefault()
+      settingsModal.classList.add('open')
+    })
+
+    settingsModal?.addEventListener('click', (e) => {
+      if (e.target === settingsModal || e.target.closest('.modal-close') || e.target.closest('[data-testid="settings-cancel"]')) {
+        settingsModal.classList.remove('open')
+      }
+    })
+
+    // Settings tabs
+    settingsTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab
+
+        // Update active tab
+        settingsTabs.forEach(t => t.classList.remove('active'))
+        tab.classList.add('active')
+        tab.setAttribute('aria-selected', 'true')
+
+        // Show corresponding content
+        settingsContents.forEach(content => {
+          content.style.display = content.id === `settings-${tabName}` ? 'block' : 'none'
+        })
+      })
+    })
+
+    // Mark active tab with aria-selected
+    document.querySelector('.settings-tab.active')?.setAttribute('aria-selected', 'true')
   </script>
 
   <!-- Clippi Chat Widget -->

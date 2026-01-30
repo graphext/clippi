@@ -308,10 +308,10 @@ export class StepObserver {
       config.onSuccess()
     }
 
-    target.addEventListener('click', handler, { once: true })
+    target.addEventListener('click', handler, { once: true, capture: true })
 
     // Return cleanup function
-    return () => target.removeEventListener('click', handler)
+    return () => target.removeEventListener('click', handler, { capture: true })
   }
 
   /**

@@ -57,12 +57,12 @@ function classifyIntent(query, manifest) {
   let bestMatch = null
   let bestScore = 0
 
-  // Score each element and find the best match
-  for (const element of manifest) {
+  // Score each target and find the best match
+  for (const target of manifest) {
     const keywords = [
-      ...element.keywords,
-      element.label.toLowerCase(),
-      ...element.description.toLowerCase().split(' ')
+      ...target.keywords,
+      target.label.toLowerCase(),
+      ...target.description.toLowerCase().split(' ')
     ]
 
     // Calculate score based on keyword matches
@@ -81,7 +81,7 @@ function classifyIntent(query, manifest) {
 
     if (score > bestScore) {
       bestScore = score
-      bestMatch = { type: 'guide', elementId: element.id, score }
+      bestMatch = { type: 'guide', targetId: target.id, score }
     }
   }
 
@@ -96,10 +96,10 @@ function classifyIntent(query, manifest) {
  * Check if user has access based on conditions
  * In production, this would check against your user database
  */
-function checkAccess(elementId, context) {
+function checkAccess(targetId, context) {
   // Demo: always allow access
   // In production, you would:
-  // 1. Look up the element's conditions from the full manifest
+  // 1. Look up the target's conditions from the full manifest
   // 2. Evaluate against the user's context
   // 3. Return blocked response with reason if not allowed
   return { allowed: true }
@@ -134,7 +134,7 @@ function generateTextResponse(query, manifest) {
  * Response:
  * {
  *   action: 'guide' | 'blocked' | 'text',
- *   elementId?: string,      // For 'guide'
+ *   targetId?: string,       // For 'guide'
  *   instruction?: string,    // For 'guide'
  *   reason?: { type, missing?, message? },  // For 'blocked'
  *   content?: string         // For 'text'
@@ -161,12 +161,12 @@ app.post('/api/clippi/chat', async (req, res) => {
 
     if (intent.type === 'guide') {
       // Check access
-      const access = checkAccess(intent.elementId, context)
+      const access = checkAccess(intent.targetId, context)
 
       if (!access.allowed) {
         return res.json({
           action: 'blocked',
-          elementId: intent.elementId,
+          targetId: intent.targetId,
           reason: {
             type: access.reason || 'permission',
             missing: access.missing,
@@ -175,13 +175,13 @@ app.post('/api/clippi/chat', async (req, res) => {
         })
       }
 
-      // Find the element for instruction
-      const element = manifest.find(e => e.id === intent.elementId)
+      // Find the target for instruction
+      const target = manifest.find(t => t.id === intent.targetId)
 
       return res.json({
         action: 'guide',
-        elementId: intent.elementId,
-        instruction: element?.description || 'Let me show you...'
+        targetId: intent.targetId,
+        instruction: target?.description || 'Let me show you...'
       })
     }
 

@@ -79,16 +79,16 @@ export interface OnBlocked {
 }
 
 /**
- * A guidable element in the manifest
+ * A guidable target in the manifest
  */
-export interface ManifestElement {
+export interface ManifestTarget {
   id: string
   selector: Selector
   label: string
   description: string
   keywords: string[]
   category: string
-  /** Multi-step path to reach this element */
+  /** Multi-step path to reach this target */
   path?: PathStep[]
   /** Condition DSL string or JS function string */
   conditions?: string
@@ -121,13 +121,13 @@ export interface Manifest {
   $schema?: string
   meta?: ManifestMeta
   defaults?: ManifestDefaults
-  elements: ManifestElement[]
+  targets: ManifestTarget[]
 }
 
 /**
- * Reduced manifest element for LLM context (guide.context.json)
+ * Reduced manifest target for LLM context (guide.context.json)
  */
-export interface ManifestContextElement {
+export interface ManifestContextTarget {
   id: string
   label: string
   description: string
@@ -139,5 +139,5 @@ export interface ManifestContextElement {
  * The reduced manifest for LLM context
  */
 export interface ManifestContext {
-  elements: ManifestContextElement[]
+  targets: ManifestContextTarget[]
 }

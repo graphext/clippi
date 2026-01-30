@@ -8,7 +8,7 @@
   "defaults": {
     "timeout_ms": 10000
   },
-  "elements": [
+  "targets": [
     {
       "id": "export-csv",
       "selector": {
@@ -135,22 +135,152 @@
             ]
           },
           "instruction": "Enter a name for your dataset",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='dataset-name-input']",
+              "not_empty": true
+            }
+          },
           "final": true
         }
       ]
     },
     {
-      "id": "import-data",
+      "id": "import-file",
       "selector": {
         "strategies": [
-          { "type": "testId", "value": "import-btn" },
-          { "type": "aria", "value": "Import data" }
+          { "type": "testId", "value": "import-file" }
         ]
       },
-      "label": "Import Data",
-      "description": "Import data from a file",
-      "keywords": ["import", "upload", "file", "data", "csv", "excel"],
-      "category": "data"
+      "label": "Import from File",
+      "description": "Import data from a local CSV, Excel, or JSON file",
+      "keywords": ["import", "upload", "file", "data", "csv", "excel", "json", "local"],
+      "category": "data",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-btn" },
+              { "type": "aria", "value": "Import data" }
+            ]
+          },
+          "instruction": "Click the Import button",
+          "success_condition": { "visible": "#import-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-source" }
+            ]
+          },
+          "instruction": "Select 'Upload File' as the source",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='import-source']",
+              "equals": "file"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-name" }
+            ]
+          },
+          "instruction": "Enter a name for your dataset",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='import-name']",
+              "not_empty": true
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-confirm" }
+            ]
+          },
+          "instruction": "Click Import to upload your file",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "import-url",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "import-url" }
+        ]
+      },
+      "label": "Import from URL",
+      "description": "Import data from a remote URL",
+      "keywords": ["import", "url", "remote", "data", "fetch", "download"],
+      "category": "data",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-btn" }
+            ]
+          },
+          "instruction": "Click the Import button",
+          "success_condition": { "visible": "#import-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-source" }
+            ]
+          },
+          "instruction": "Select 'From URL' as the source",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='import-source']",
+              "equals": "url"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-url" }
+            ]
+          },
+          "instruction": "Enter the URL where your data is hosted",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='import-url']",
+              "contains": "http"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-name" }
+            ]
+          },
+          "instruction": "Enter a name for your dataset",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='import-name']",
+              "not_empty": true
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "import-confirm" }
+            ]
+          },
+          "instruction": "Click Import to fetch the data",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
     },
     {
       "id": "search-datasets",
@@ -216,6 +346,215 @@
       "category": "navigation"
     },
     {
+      "id": "change-theme-dark",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "settings-theme" }
+        ]
+      },
+      "label": "Change to Dark Theme",
+      "description": "Switch the application theme to dark mode",
+      "keywords": ["theme", "dark", "dark mode", "appearance", "settings"],
+      "category": "settings",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "nav-settings" }
+            ]
+          },
+          "instruction": "Click on Settings in the navigation",
+          "success_condition": { "visible": "#settings-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-theme" }
+            ]
+          },
+          "instruction": "Select 'Dark' from the Theme dropdown",
+          "success_condition": {
+            "value": {
+              "selector": "[data-testid='settings-theme']",
+              "equals": "dark"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-save" }
+            ]
+          },
+          "instruction": "Click 'Save Changes' to apply",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "change-language",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "settings-language" }
+        ]
+      },
+      "label": "Change Language",
+      "description": "Change the application language",
+      "keywords": ["language", "spanish", "french", "locale", "settings"],
+      "category": "settings",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "nav-settings" }
+            ]
+          },
+          "instruction": "Click on Settings in the navigation",
+          "success_condition": { "visible": "#settings-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-tab-general" }
+            ]
+          },
+          "instruction": "Make sure you're on the General tab",
+          "success_condition": {
+            "attribute": {
+              "selector": "[data-testid='settings-tab-general']",
+              "name": "aria-selected",
+              "value": "true"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-language" }
+            ]
+          },
+          "instruction": "Select your preferred language from the dropdown",
+          "success_condition": { "click": true }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-save" }
+            ]
+          },
+          "instruction": "Click 'Save Changes' to apply",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "configure-notifications",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "settings-tab-notifications" }
+        ]
+      },
+      "label": "Configure Notifications",
+      "description": "Set up email and push notification preferences",
+      "keywords": ["notifications", "email", "push", "alerts", "settings"],
+      "category": "settings",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "nav-settings" }
+            ]
+          },
+          "instruction": "Click on Settings in the navigation",
+          "success_condition": { "visible": "#settings-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-tab-notifications" }
+            ]
+          },
+          "instruction": "Click on the 'Notifications' tab",
+          "success_condition": {
+            "attribute": {
+              "selector": "[data-testid='settings-tab-notifications']",
+              "name": "aria-selected",
+              "value": "true"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-digest" }
+            ]
+          },
+          "instruction": "Choose how often you want to receive digest emails",
+          "success_condition": { "click": true }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-save" }
+            ]
+          },
+          "instruction": "Click 'Save Changes' to apply your notification settings",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "view-api-key",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "settings-api-key" }
+        ]
+      },
+      "label": "View API Key",
+      "description": "Find your API key for integrations",
+      "keywords": ["api", "key", "integration", "developer", "token"],
+      "category": "settings",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "nav-settings" }
+            ]
+          },
+          "instruction": "Click on Settings in the navigation",
+          "success_condition": { "visible": "#settings-modal.open" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-tab-api" }
+            ]
+          },
+          "instruction": "Click on the 'API Keys' tab",
+          "success_condition": {
+            "attribute": {
+              "selector": "[data-testid='settings-tab-api']",
+              "name": "aria-selected",
+              "value": "true"
+            }
+          }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "settings-api-key" }
+            ]
+          },
+          "instruction": "Your API key is displayed here. Click to copy it.",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
       "id": "user-profile",
       "selector": {
         "strategies": [
@@ -244,6 +583,7 @@
             ]
           },
           "instruction": "Click on 'Profile'",
+          "success_condition": { "click": true },
           "final": true
         }
       ]
@@ -276,6 +616,7 @@
             ]
           },
           "instruction": "Click 'Logout'",
+          "success_condition": { "click": true },
           "final": true
         }
       ]

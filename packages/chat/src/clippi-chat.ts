@@ -254,8 +254,8 @@ export class ClippiChatElement extends HTMLElement {
   /**
    * Handle blocked access
    */
-  private handleBlocked(element: { id: string; label: string }, result: { message?: string }): void {
-    const message = result.message || `Access to "${element.label}" is not available`
+  private handleBlocked(target: { id: string; label: string }, result: { message?: string }): void {
+    const message = result.message || `Access to "${target.label}" is not available`
     this.addMessage({ role: 'assistant', content: message })
   }
 

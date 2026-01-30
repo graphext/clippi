@@ -58,7 +58,7 @@ export interface ChatMessage {
  */
 export interface ChatResponse {
   action: 'guide' | 'blocked' | 'text'
-  elementId?: string
+  targetId?: string
   instruction?: string
   reason?: {
     type: 'plan' | 'permission' | 'state' | 'flag'

@@ -3,7 +3,7 @@ import { findById, matchByQuery, findBestMatch, findByCategory } from './matcher
 import type { Manifest } from '../types/manifest.js'
 
 const mockManifest: Manifest = {
-  elements: [
+  targets: [
     {
       id: 'export-csv',
       selector: { strategies: [{ type: 'testId', value: 'export-btn' }] },
@@ -32,7 +32,7 @@ const mockManifest: Manifest = {
 }
 
 describe('findById', () => {
-  it('finds element by exact id', () => {
+  it('finds target by exact id', () => {
     const result = findById(mockManifest, 'export-csv')
     expect(result?.id).toBe('export-csv')
   })
@@ -47,13 +47,13 @@ describe('matchByQuery', () => {
   it('matches by keyword', () => {
     const results = matchByQuery(mockManifest, 'export')
     expect(results.length).toBeGreaterThan(0)
-    expect(results[0].element.id).toBe('export-csv')
+    expect(results[0].target.id).toBe('export-csv')
   })
 
   it('matches by label', () => {
     const results = matchByQuery(mockManifest, 'Settings')
     expect(results.length).toBeGreaterThan(0)
-    expect(results[0].element.id).toBe('settings')
+    expect(results[0].target.id).toBe('settings')
   })
 
   it('returns empty array for no matches', () => {
@@ -74,7 +74,7 @@ describe('matchByQuery', () => {
 })
 
 describe('findBestMatch', () => {
-  it('returns best matching element', () => {
+  it('returns best matching target', () => {
     const result = findBestMatch(mockManifest, 'how do I export data?')
     expect(result?.id).toBe('export-csv')
   })
@@ -86,11 +86,11 @@ describe('findBestMatch', () => {
 })
 
 describe('findByCategory', () => {
-  it('returns all elements in category', () => {
+  it('returns all targets in category', () => {
     const results = findByCategory(mockManifest, 'data')
     expect(results).toHaveLength(2)
-    expect(results.map(e => e.id)).toContain('export-csv')
-    expect(results.map(e => e.id)).toContain('create-dataset')
+    expect(results.map(t => t.id)).toContain('export-csv')
+    expect(results.map(t => t.id)).toContain('create-dataset')
   })
 
   it('is case-insensitive', () => {

@@ -5,6 +5,6 @@ export {
   matchByQuery,
   findBestMatch,
   findByCategory,
-  getContextElements,
+  getContextTargets,
   type MatchResult,
 } from './matcher.js'

@@ -5,7 +5,7 @@ import {
   type ChatResponse,
   type StepInfo,
   type FlowInfo,
-  type ManifestElement,
+  type ManifestTarget,
   type ClippiEventHandler,
   type ClippiEvents,
 } from '@clippi/core'
@@ -31,8 +31,8 @@ export interface HeadlessClippi {
   cursor: Cursor
   /** Ask a question */
   ask: (query: string) => Promise<ChatResponse>
-  /** Guide to an element by ID */
-  guide: (elementId: string) => Promise<ManifestElement | null>
+  /** Guide to a target by ID */
+  guide: (targetId: string) => Promise<ManifestTarget | null>
   /** Cancel the current flow */
   cancel: () => void
   /** Manually confirm the current step */
@@ -75,7 +75,7 @@ export interface HeadlessClippi {
  * }
  *
  * on('flowCompleted', (flow, duration) => {
- *   console.log(`Flow ${flow.elementId} completed in ${duration}ms`)
+ *   console.log(`Flow ${flow.targetId} completed in ${duration}ms`)
  * })
  * ```
  */
@@ -117,7 +117,7 @@ export async function createHeadlessClippi(config: HeadlessClippiConfig): Promis
     clippi,
     cursor,
     ask: (query: string) => clippi.ask(query),
-    guide: (elementId: string) => clippi.guide(elementId),
+    guide: (targetId: string) => clippi.guide(targetId),
     cancel: () => {
       clippi.cancel()
       cursor.hide()

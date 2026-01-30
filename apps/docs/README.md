@@ -1,5 +1,7 @@
 # Clippi Documentation
 
+> **See also:** [Authoring Guides](./AUTHORING_GUIDES.md) - Comprehensive guide for creating manifest files
+
 ## Quick Start
 
 ### Installation

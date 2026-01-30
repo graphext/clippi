@@ -58,7 +58,7 @@ export async function init(options: InitOptions = {}): Promise<void> {
 
   console.log('\n✅ Clippi initialized successfully!\n')
   console.log('Next steps:')
-  console.log('  1. Edit guide.manifest.json to define your UI elements')
+  console.log('  1. Edit guide.manifest.json to define your UI targets')
   console.log('  2. Run "npx clippi serve" to start the development server')
   console.log('  3. Run "npx clippi validate" to check your selectors\n')
 }

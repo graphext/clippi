@@ -1,4 +1,4 @@
-import type { ManifestElement, PathStep } from '../types/manifest.js'
+import type { ManifestTarget, PathStep } from '../types/manifest.js'
 import type { StepInfo, FlowInfo } from '../types/events.js'
 import { EventEmitter } from '../events/emitter.js'
 import { resolveSelector } from '../selectors/resolver.js'
@@ -40,7 +40,7 @@ export interface SequencerConfig {
  */
 export class StepSequencer extends EventEmitter {
   private state: SequencerState = 'idle'
-  private element: ManifestElement | null = null
+  private target: ManifestTarget | null = null
   private currentStepIndex = 0
   private startTime = 0
   private config: SequencerConfig
@@ -67,10 +67,10 @@ export class StepSequencer extends EventEmitter {
    * Get current flow info
    */
   getCurrentFlow(): FlowInfo | null {
-    if (!this.element) return null
+    if (!this.target) return null
     return {
-      elementId: this.element.id,
-      element: this.element,
+      targetId: this.target.id,
+      target: this.target,
       startedAt: this.startTime,
     }
   }
@@ -79,7 +79,7 @@ export class StepSequencer extends EventEmitter {
    * Get current step info
    */
   getCurrentStep(): StepInfo | null {
-    if (!this.element) return null
+    if (!this.target) return null
     const steps = this.getSteps()
     if (this.currentStepIndex >= steps.length) return null
 
@@ -87,7 +87,7 @@ export class StepSequencer extends EventEmitter {
     const result = resolveSelector(step.selector)
 
     return {
-      element: this.element,
+      target: this.target,
       stepIndex: this.currentStepIndex,
       totalSteps: steps.length,
       step,
@@ -97,21 +97,23 @@ export class StepSequencer extends EventEmitter {
   }
 
   /**
-   * Get all steps for current element
+   * Get all steps for current target
    */
   private getSteps(): PathStep[] {
-    if (!this.element) return []
+    if (!this.target) return []
 
-    // If element has a path, use it
-    if (this.element.path && this.element.path.length > 0) {
-      return this.element.path
+    // If target has a path, use it
+    if (this.target.path && this.target.path.length > 0) {
+      return this.target.path
     }
 
-    // Otherwise, the element itself is a single step
+    // Otherwise, the target itself is a single step
+    // Default to click detection since instruction is "Click on {label}"
     return [
       {
-        selector: this.element.selector,
-        instruction: `Click on ${this.element.label}`,
+        selector: this.target.selector,
+        instruction: `Click on ${this.target.label}`,
+        success_condition: { click: true },
         final: true,
       },
     ]
@@ -138,14 +140,14 @@ export class StepSequencer extends EventEmitter {
   }
 
   /**
-   * Start a flow for a manifest element
+   * Start a flow for a manifest target
    *
-   * @param element The manifest element to guide to
+   * @param target The manifest target to guide to
    */
-  start(element: ManifestElement): void {
+  start(target: ManifestTarget): void {
     this.stop() // Clean up any existing flow
 
-    this.element = element
+    this.target = target
     this.startTime = Date.now()
     this.currentStepIndex = this.findStartStep()
 
@@ -335,7 +337,7 @@ export class StepSequencer extends EventEmitter {
   private cleanup(): void {
     this.clearConfirmationTimer()
     this.observer.stop()
-    this.element = null
+    this.target = null
     this.currentStepIndex = 0
   }
 
