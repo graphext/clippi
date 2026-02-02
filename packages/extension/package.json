@@ -1,0 +1,25 @@
+{
+  "name": "@clippi/extension",
+  "version": "0.1.0",
+  "description": "Chrome extension for manual flow recording and manifest generation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "clippi",
+    "chrome-extension",
+    "recorder",
+    "manifest"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0"
+  }
+}
