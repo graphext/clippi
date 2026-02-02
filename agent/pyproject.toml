@@ -1,0 +1,23 @@
+[project]
+name = "clippi-agent"
+version = "0.1.0"
+description = "AI Agent for generating Clippi manifests using Browser Use"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "browser-use>=0.1.40",
+    "langchain-google-genai>=2.0.0",
+    "playwright>=1.48.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+clippi-agent = "clippi_agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["clippi_agent"]
