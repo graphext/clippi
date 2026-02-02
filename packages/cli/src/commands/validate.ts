@@ -465,34 +465,79 @@ async function executePath(
   for (let i = 0; i < target.path.length; i++) {
     const step = target.path[i]
     const stepNum = i + 1
+    const action = step.action ?? 'click'
 
     try {
-      // Find and click the element
+      // Find the element
       const strategies = step.selector?.strategies ?? []
-      let clicked = false
+      let actionCompleted = false
 
       for (const strategy of strategies) {
         const selector = strategyToPlaywrightSelector(strategy)
         try {
           const locator = page.locator(selector).first()
 
-          // Wait for element to be visible and clickable
+          // Wait for element to be visible
           await locator.waitFor({ state: 'visible', timeout: 5000 })
 
           // Scroll into view if needed
           await locator.scrollIntoViewIfNeeded()
 
-          // Click
-          await locator.click({ timeout: 5000 })
-          clicked = true
+          // Perform the action based on type
+          switch (action) {
+            case 'click':
+              await locator.click({ timeout: 5000 })
+              break
+
+            case 'type':
+              if (!step.input) {
+                result.failedAt = { step: stepNum, reason: `'type' action requires 'input' value` }
+                return result
+              }
+              await locator.fill(step.input)
+              break
+
+            case 'select':
+              if (!step.input) {
+                result.failedAt = { step: stepNum, reason: `'select' action requires 'input' value` }
+                return result
+              }
+              // Try selectOption first (for <select> elements), fall back to clicking option
+              try {
+                await locator.selectOption(step.input, { timeout: 2000 })
+              } catch {
+                // Maybe it's a custom dropdown - click to open, then click the option
+                await locator.click()
+                await page.waitForTimeout(300)
+                // Try to find and click the option by text or value
+                const optionLocator = page.locator(`[data-value="${step.input}"], [value="${step.input}"]`).first()
+                const optionByText = page.getByText(step.input, { exact: true }).first()
+                try {
+                  await optionLocator.click({ timeout: 2000 })
+                } catch {
+                  await optionByText.click({ timeout: 2000 })
+                }
+              }
+              break
+
+            case 'clear':
+              await locator.clear()
+              break
+
+            default:
+              result.failedAt = { step: stepNum, reason: `Unknown action type: ${action}` }
+              return result
+          }
+
+          actionCompleted = true
           break
         } catch {
           continue
         }
       }
 
-      if (!clicked) {
-        result.failedAt = { step: stepNum, reason: `Could not find/click element for step ${stepNum}` }
+      if (!actionCompleted) {
+        result.failedAt = { step: stepNum, reason: `Could not find element or perform '${action}' for step ${stepNum}` }
         return result
       }
 

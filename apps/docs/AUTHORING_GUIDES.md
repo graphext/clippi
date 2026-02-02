@@ -203,6 +203,8 @@ Paths define sequences of steps to complete a flow.
 {
   "selector": { "strategies": [...] },
   "instruction": "Human-readable instruction",
+  "action": "click",
+  "input": "value to type or select",
   "success_condition": { ... },
   "final": false
 }
@@ -212,10 +214,67 @@ Paths define sequences of steps to complete a flow.
 |-------|----------|-------------|
 | `selector` | Yes | How to find the step's target element |
 | `instruction` | Yes | What to tell the user |
-| `success_condition` | No* | How to detect step completion |
+| `action` | No | Action to perform: `click`, `type`, `select`, `clear` (default: `click`) |
+| `input` | No* | Value to type or option to select |
+| `success_condition` | No** | How to detect step completion |
 | `final` | No | Mark as last step (default: false) |
 
-*If no `success_condition` is provided, the step relies on manual confirmation timeout.
+*Required when `action` is `type` or `select`.
+**If no `success_condition` is provided, the step relies on manual confirmation timeout.
+
+### Action Types
+
+#### `click` (default)
+Click the target element. This is the default action if not specified.
+
+```json
+{
+  "selector": { "strategies": [{ "type": "testId", "value": "submit-btn" }] },
+  "instruction": "Click the Submit button",
+  "action": "click"
+}
+```
+
+#### `type`
+Type text into an input field. Requires the `input` field.
+
+```json
+{
+  "selector": { "strategies": [{ "type": "testId", "value": "email-input" }] },
+  "instruction": "Enter your email address",
+  "action": "type",
+  "input": "user@example.com",
+  "success_condition": {
+    "value": { "selector": "[data-testid='email-input']", "contains": "@" }
+  }
+}
+```
+
+#### `select`
+Select an option from a dropdown or select element. Requires the `input` field with the option value.
+
+```json
+{
+  "selector": { "strategies": [{ "type": "testId", "value": "country-select" }] },
+  "instruction": "Select your country",
+  "action": "select",
+  "input": "us",
+  "success_condition": {
+    "value": { "selector": "[data-testid='country-select']", "equals": "us" }
+  }
+}
+```
+
+#### `clear`
+Clear the content of an input field (useful before typing).
+
+```json
+{
+  "selector": { "strategies": [{ "type": "testId", "value": "search-input" }] },
+  "instruction": "Clear the search field",
+  "action": "clear"
+}
+```
 
 ### Step Sequencing Logic
 
@@ -495,7 +554,7 @@ The selector is resolved when the step is shown. If the modal isn't open yet, el
 }
 ```
 
-### Example 2: Form Submission Flow
+### Example 2: Form Submission Flow (with actions)
 
 ```json
 {
@@ -511,16 +570,22 @@ The selector is resolved when the step is shown. If the modal isn't open yet, el
     {
       "selector": { "strategies": [{ "type": "testId", "value": "contact-name" }] },
       "instruction": "Enter your name",
+      "action": "type",
+      "input": "John Doe",
       "success_condition": { "value": { "selector": "[data-testid='contact-name']", "not_empty": true } }
     },
     {
       "selector": { "strategies": [{ "type": "testId", "value": "contact-email" }] },
       "instruction": "Enter your email address",
+      "action": "type",
+      "input": "john@example.com",
       "success_condition": { "value": { "selector": "[data-testid='contact-email']", "contains": "@" } }
     },
     {
       "selector": { "strategies": [{ "type": "testId", "value": "contact-message" }] },
       "instruction": "Type your message",
+      "action": "type",
+      "input": "Hello, I have a question...",
       "success_condition": { "value": { "selector": "[data-testid='contact-message']", "not_empty": true } }
     },
     {
@@ -532,6 +597,8 @@ The selector is resolved when the step is shown. If the modal isn't open yet, el
   ]
 }
 ```
+
+**Note:** The `action` and `input` fields enable E2E testing via `clippi validate --e2e`. Without them, E2E tests only click elements.
 
 ### Example 3: Settings with Tabs
 

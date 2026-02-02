@@ -59,11 +59,24 @@ export interface SuccessCondition {
 }
 
 /**
+ * Action type for a path step
+ * - click: Click the element (default)
+ * - type: Type text into an input field
+ * - select: Select an option from a dropdown/select
+ * - clear: Clear the input field before typing
+ */
+export type PathStepAction = 'click' | 'type' | 'select' | 'clear'
+
+/**
  * A single step in a multi-step path
  */
 export interface PathStep {
   selector: Selector
   instruction: string
+  /** Action to perform on the element (default: 'click') */
+  action?: PathStepAction
+  /** Value to type or option to select (required for 'type' and 'select' actions) */
+  input?: string
   success_condition?: SuccessCondition
   /** Marks this as the final step in the path */
   final?: boolean

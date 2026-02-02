@@ -87,6 +87,8 @@
             ]
           },
           "instruction": "Select Excel (XLSX) from the format dropdown",
+          "action": "select",
+          "input": "xlsx",
           "success_condition": {
             "value": {
               "selector": "[data-testid='export-format']",
@@ -135,6 +137,8 @@
             ]
           },
           "instruction": "Enter a name for your dataset",
+          "action": "type",
+          "input": "My New Dataset",
           "success_condition": {
             "value": {
               "selector": "[data-testid='dataset-name-input']",
@@ -174,6 +178,8 @@
             ]
           },
           "instruction": "Select 'Upload File' as the source",
+          "action": "select",
+          "input": "file",
           "success_condition": {
             "value": {
               "selector": "[data-testid='import-source']",
@@ -188,6 +194,8 @@
             ]
           },
           "instruction": "Enter a name for your dataset",
+          "action": "type",
+          "input": "Imported Data",
           "success_condition": {
             "value": {
               "selector": "[data-testid='import-name']",
@@ -235,6 +243,8 @@
             ]
           },
           "instruction": "Select 'From URL' as the source",
+          "action": "select",
+          "input": "url",
           "success_condition": {
             "value": {
               "selector": "[data-testid='import-source']",
@@ -249,6 +259,8 @@
             ]
           },
           "instruction": "Enter the URL where your data is hosted",
+          "action": "type",
+          "input": "https://example.com/data.csv",
           "success_condition": {
             "value": {
               "selector": "[data-testid='import-url']",
@@ -263,6 +275,8 @@
             ]
           },
           "instruction": "Enter a name for your dataset",
+          "action": "type",
+          "input": "URL Import",
           "success_condition": {
             "value": {
               "selector": "[data-testid='import-name']",
@@ -373,6 +387,8 @@
             ]
           },
           "instruction": "Select 'Dark' from the Theme dropdown",
+          "action": "select",
+          "input": "dark",
           "success_condition": {
             "value": {
               "selector": "[data-testid='settings-theme']",
