@@ -620,6 +620,135 @@
           "final": true
         }
       ]
+    },
+    {
+      "id": "view-oldest-activity",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "activity-item-oldest" }
+        ]
+      },
+      "label": "View First Activity",
+      "description": "Scroll to see your account's first activity (demonstrates scroll in container)",
+      "keywords": ["activity", "first", "oldest", "history", "scroll", "log"],
+      "category": "activity",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "activity-list" }
+            ]
+          },
+          "instruction": "Look at the Activity panel on the right side",
+          "success_condition": { "visible": "[data-testid='activity-list']" }
+        },
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "activity-item-oldest" }
+            ]
+          },
+          "instruction": "Scroll down in the activity list to find your first activity",
+          "success_condition": { "visible": "[data-testid='activity-item-oldest']" },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "view-unread-activity",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "activity-item-1" }
+        ]
+      },
+      "label": "View Latest Activity",
+      "description": "See the most recent unread activity notification",
+      "keywords": ["activity", "latest", "recent", "notification", "unread"],
+      "category": "activity"
+    },
+    {
+      "id": "view-documentation",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "footer-docs" }
+        ]
+      },
+      "label": "View Documentation",
+      "description": "Access the documentation (demonstrates scroll to footer)",
+      "keywords": ["documentation", "docs", "help", "guide", "manual", "scroll"],
+      "category": "resources",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "footer-docs" }
+            ]
+          },
+          "instruction": "Scroll down to the footer and click Documentation",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "view-api-reference",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "footer-api-reference" }
+        ]
+      },
+      "label": "View API Reference",
+      "description": "Access the API reference documentation",
+      "keywords": ["api", "reference", "documentation", "developer"],
+      "category": "resources"
+    },
+    {
+      "id": "send-feedback",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "footer-feedback-btn" }
+        ]
+      },
+      "label": "Send Feedback",
+      "description": "Send feedback about the application (demonstrates scroll to footer)",
+      "keywords": ["feedback", "contact", "support", "help", "suggestion", "scroll"],
+      "category": "support",
+      "path": [
+        {
+          "selector": {
+            "strategies": [
+              { "type": "testId", "value": "footer-feedback-btn" }
+            ]
+          },
+          "instruction": "Scroll to the bottom and click 'Send Feedback'",
+          "success_condition": { "click": true },
+          "final": true
+        }
+      ]
+    },
+    {
+      "id": "view-privacy-policy",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "footer-privacy" }
+        ]
+      },
+      "label": "Privacy Policy",
+      "description": "Read our privacy policy",
+      "keywords": ["privacy", "policy", "legal", "data"],
+      "category": "legal"
+    },
+    {
+      "id": "view-terms",
+      "selector": {
+        "strategies": [
+          { "type": "testId", "value": "footer-terms" }
+        ]
+      },
+      "label": "Terms of Service",
+      "description": "Read the terms of service",
+      "keywords": ["terms", "service", "legal", "tos"],
+      "category": "legal"
     }
   ]
 }

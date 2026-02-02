@@ -20,12 +20,6 @@
       padding: 0;
     }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #f5f5f5;
-      min-height: 100vh;
-    }
-
     /* Header */
     .header {
       background: white;
@@ -34,6 +28,19 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+    }
+
+    /* Body offset for fixed header */
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding-top: 68px;
     }
 
     .logo {
@@ -345,6 +352,137 @@
       color: white !important;
       border-color: #6366f1 !important;
     }
+
+    /* Main layout with sidebar */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .main-content {
+      min-width: 0;
+    }
+
+    /* Activity sidebar */
+    .activity-sidebar {
+      position: sticky;
+      top: 92px;
+      height: calc(100vh - 124px);
+    }
+
+    .activity-panel {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .activity-header {
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .activity-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .activity-item {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .activity-item:hover {
+      background: #f3f4f6;
+    }
+
+    .activity-item.unread {
+      background: #eef2ff;
+    }
+
+    .activity-item-title {
+      font-weight: 500;
+      color: #1f2937;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .activity-item-desc {
+      color: #6b7280;
+      font-size: 13px;
+    }
+
+    .activity-item-time {
+      color: #9ca3af;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    /* Footer section */
+    .footer-section {
+      background: white;
+      border-top: 1px solid #e5e7eb;
+      padding: 48px 24px;
+      margin-top: 48px;
+    }
+
+    .footer-content {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 32px;
+      margin-bottom: 32px;
+    }
+
+    .footer-section-title {
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 16px;
+    }
+
+    .footer-links {
+      list-style: none;
+    }
+
+    .footer-links li {
+      margin-bottom: 8px;
+    }
+
+    .footer-links a {
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .footer-links a:hover {
+      color: #6366f1;
+    }
+
+    .footer-bottom {
+      padding-top: 24px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #9ca3af;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -372,69 +510,185 @@
   </header>
 
   <!-- Main Content -->
-  <main class="main">
-    <div class="page-header">
-      <h1 class="page-title">Data Management</h1>
-      <div class="actions">
-        <button class="btn btn-secondary" data-testid="import-btn" aria-label="Import data">
-          Import
-        </button>
-        <button class="btn btn-primary" data-testid="export-btn" aria-label="Export data">
-          Export
-        </button>
-        <button class="btn btn-primary" data-testid="create-dataset-btn" aria-label="Create new dataset">
-          + New Dataset
-        </button>
+  <div class="main-layout">
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">Data Management</h1>
+        <div class="actions">
+          <button class="btn btn-secondary" data-testid="import-btn" aria-label="Import data">
+            Import
+          </button>
+          <button class="btn btn-primary" data-testid="export-btn" aria-label="Export data">
+            Export
+          </button>
+          <button class="btn btn-primary" data-testid="create-dataset-btn" aria-label="Create new dataset">
+            + New Dataset
+          </button>
+        </div>
       </div>
-    </div>
 
-    <div class="card">
-      <div class="table-header">
-        <span class="table-title">Datasets</span>
-        <input type="text" class="form-input" placeholder="Search..." style="width: 200px" data-testid="search-input" />
+      <div class="card">
+        <div class="table-header">
+          <span class="table-title">Datasets</span>
+          <input type="text" class="form-input" placeholder="Search..." style="width: 200px" data-testid="search-input" />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Records</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Sales Q1 2024</td>
+              <td>12,345</td>
+              <td><span class="status status-active">Active</span></td>
+              <td>Jan 15, 2024</td>
+              <td>
+                <button class="btn btn-secondary" style="padding: 6px 12px" data-testid="view-dataset">View</button>
+              </td>
+            </tr>
+            <tr>
+              <td>Customer Analytics</td>
+              <td>8,901</td>
+              <td><span class="status status-active">Active</span></td>
+              <td>Feb 3, 2024</td>
+              <td>
+                <button class="btn btn-secondary" style="padding: 6px 12px">View</button>
+              </td>
+            </tr>
+            <tr>
+              <td>Marketing Campaign</td>
+              <td>2,456</td>
+              <td><span class="status status-pending">Processing</span></td>
+              <td>Mar 10, 2024</td>
+              <td>
+                <button class="btn btn-secondary" style="padding: 6px 12px">View</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Records</th>
-            <th>Status</th>
-            <th>Created</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Sales Q1 2024</td>
-            <td>12,345</td>
-            <td><span class="status status-active">Active</span></td>
-            <td>Jan 15, 2024</td>
-            <td>
-              <button class="btn btn-secondary" style="padding: 6px 12px" data-testid="view-dataset">View</button>
-            </td>
-          </tr>
-          <tr>
-            <td>Customer Analytics</td>
-            <td>8,901</td>
-            <td><span class="status status-active">Active</span></td>
-            <td>Feb 3, 2024</td>
-            <td>
-              <button class="btn btn-secondary" style="padding: 6px 12px">View</button>
-            </td>
-          </tr>
-          <tr>
-            <td>Marketing Campaign</td>
-            <td>2,456</td>
-            <td><span class="status status-pending">Processing</span></td>
-            <td>Mar 10, 2024</td>
-            <td>
-              <button class="btn btn-secondary" style="padding: 6px 12px">View</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    </main>
+
+    <!-- Activity Sidebar with Scroll Container -->
+    <aside class="activity-sidebar">
+      <div class="activity-panel">
+        <div class="activity-header">Recent Activity</div>
+        <div class="activity-list" data-testid="activity-list">
+          <div class="activity-item unread" data-testid="activity-item-1">
+            <div class="activity-item-title">Dataset imported</div>
+            <div class="activity-item-desc">Sales Q2 2024 imported successfully</div>
+            <div class="activity-item-time">2 minutes ago</div>
+          </div>
+          <div class="activity-item unread" data-testid="activity-item-2">
+            <div class="activity-item-title">Export completed</div>
+            <div class="activity-item-desc">Customer Analytics exported to CSV</div>
+            <div class="activity-item-time">15 minutes ago</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-item-title">User joined</div>
+            <div class="activity-item-desc">Sarah invited to workspace</div>
+            <div class="activity-item-time">1 hour ago</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-item-title">Processing started</div>
+            <div class="activity-item-desc">Marketing Campaign analysis</div>
+            <div class="activity-item-time">2 hours ago</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-item-title">Dataset updated</div>
+            <div class="activity-item-desc">Sales Q1 2024 - 500 new records</div>
+            <div class="activity-item-time">3 hours ago</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-item-title">Report generated</div>
+            <div class="activity-item-desc">Monthly summary ready</div>
+            <div class="activity-item-time">5 hours ago</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-item-title">API key rotated</div>
+            <div class="activity-item-desc">Security update applied</div>
+            <div class="activity-item-time">Yesterday</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-item-title">Backup completed</div>
+            <div class="activity-item-desc">All datasets backed up</div>
+            <div class="activity-item-time">Yesterday</div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-item-title">Theme changed</div>
+            <div class="activity-item-desc">Switched to dark mode</div>
+            <div class="activity-item-time">2 days ago</div>
+          </div>
+          <div class="activity-item" data-testid="activity-item-old">
+            <div class="activity-item-title">Workspace created</div>
+            <div class="activity-item-desc">Initial setup completed</div>
+            <div class="activity-item-time">1 week ago</div>
+          </div>
+          <div class="activity-item" data-testid="activity-item-oldest">
+            <div class="activity-item-title">Welcome!</div>
+            <div class="activity-item-desc">Account created - first login</div>
+            <div class="activity-item-time">2 weeks ago</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Footer Section (requires viewport scroll) -->
+  <footer class="footer-section">
+    <div class="footer-content">
+      <div class="footer-grid">
+        <div>
+          <h3 class="footer-section-title">Product</h3>
+          <ul class="footer-links">
+            <li><a href="#" data-testid="footer-features">Features</a></li>
+            <li><a href="#" data-testid="footer-pricing">Pricing</a></li>
+            <li><a href="#" data-testid="footer-integrations">Integrations</a></li>
+            <li><a href="#" data-testid="footer-changelog">Changelog</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="footer-section-title">Resources</h3>
+          <ul class="footer-links">
+            <li><a href="#" data-testid="footer-docs">Documentation</a></li>
+            <li><a href="#" data-testid="footer-api-reference">API Reference</a></li>
+            <li><a href="#" data-testid="footer-tutorials">Tutorials</a></li>
+            <li><a href="#" data-testid="footer-blog">Blog</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="footer-section-title">Company</h3>
+          <ul class="footer-links">
+            <li><a href="#" data-testid="footer-about">About Us</a></li>
+            <li><a href="#" data-testid="footer-careers">Careers</a></li>
+            <li><a href="#" data-testid="footer-contact">Contact</a></li>
+            <li><a href="#" data-testid="footer-press">Press Kit</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="footer-section-title">Legal</h3>
+          <ul class="footer-links">
+            <li><a href="#" data-testid="footer-privacy">Privacy Policy</a></li>
+            <li><a href="#" data-testid="footer-terms">Terms of Service</a></li>
+            <li><a href="#" data-testid="footer-cookies">Cookie Policy</a></li>
+            <li><a href="#" data-testid="footer-gdpr">GDPR</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2024 DemoApp. All rights reserved.</span>
+        <button class="btn btn-secondary" data-testid="footer-feedback-btn" style="padding: 8px 16px;">
+          Send Feedback
+        </button>
+      </div>
     </div>
-  </main>
+  </footer>
 
   <!-- Export Modal -->
   <div class="modal-overlay" id="export-modal">

@@ -5,7 +5,16 @@ export { Clippi, type ClippiState } from './clippi.js'
 export * from './types/index.js'
 
 // Actionability
-export { isActionable, scrollIntoViewIfNeeded, type ActionabilityResult } from './actionability/checks.js'
+export {
+  isActionable,
+  scrollIntoViewIfNeeded,
+  getScrollParent,
+  getFixedOffsets,
+  type ActionabilityResult,
+  type ActionabilityOptions,
+  type FixedOffsets,
+  type ScrollIntoViewIfNeededOptions,
+} from './actionability/checks.js'
 
 // Conditions
 export {
