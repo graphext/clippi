@@ -197,7 +197,12 @@ async function validateSelectorsWithPlaywright(
   try {
     console.log(`🌐 Launching browser...`)
     try {
-      browser = await playwright.chromium.launch({ headless: true })
+      // Support custom executable path via environment variable
+      const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      browser = await playwright.chromium.launch({
+        headless: true,
+        executablePath: executablePath || undefined,
+      })
     } catch (launchError) {
       const errorMsg = launchError instanceof Error ? launchError.message : String(launchError)
       if (errorMsg.includes("Executable doesn't exist")) {
