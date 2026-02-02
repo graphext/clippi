@@ -6,7 +6,13 @@ import {
   ConditionParseError,
   type Manifest,
   type ManifestTarget,
+  type SelectorStrategy,
 } from '@clippi/core'
+
+/**
+ * Playwright types (dynamically imported)
+ */
+type Browser = Awaited<ReturnType<typeof import('playwright')['chromium']['launch']>>
 
 /**
  * Validate command options
@@ -36,11 +42,11 @@ function validateConditions(target: ManifestTarget): string[] {
   if (target.conditions) {
     try {
       parseCondition(target.conditions)
-    } catch (error) {
-      if (error instanceof ConditionParseError) {
-        errors.push(`${target.id}: Invalid condition - ${error.message}`)
+    } catch (err) {
+      if (err instanceof ConditionParseError) {
+        errors.push(`${target.id}: Invalid condition - ${err.message}`)
       } else {
-        errors.push(`${target.id}: Invalid condition - ${error}`)
+        errors.push(`${target.id}: Invalid condition - ${err}`)
       }
     }
   }
@@ -130,6 +136,162 @@ function validatePath(target: ManifestTarget): string[] {
 }
 
 /**
+ * Result of validating a selector against a live page
+ */
+interface SelectorValidationResult {
+  targetId: string
+  strategy: SelectorStrategy
+  found: boolean
+  elementCount: number
+  error?: string
+}
+
+/**
+ * Convert a selector strategy to a Playwright-compatible selector
+ */
+function strategyToPlaywrightSelector(strategy: SelectorStrategy): string {
+  switch (strategy.type) {
+    case 'testId':
+      return `[data-testid="${strategy.value}"]`
+    case 'aria':
+      return `[aria-label="${strategy.value}"]`
+    case 'css':
+      return strategy.value
+    case 'text':
+      // Playwright text selector with optional tag filter
+      if (strategy.tag) {
+        return `${strategy.tag}:has-text("${strategy.value}")`
+      }
+      return `text="${strategy.value}"`
+    default:
+      return strategy.value
+  }
+}
+
+/**
+ * Validate all selectors against a live page using Playwright
+ */
+async function validateSelectorsWithPlaywright(
+  manifest: Manifest,
+  url: string
+): Promise<{ results: SelectorValidationResult[]; errors: string[] }> {
+  // Dynamically import Playwright
+  let playwright
+  try {
+    playwright = await import('playwright')
+  } catch {
+    return {
+      results: [],
+      errors: [
+        'Playwright is not installed. Run: npx playwright install chromium',
+        'Or install with: pnpm add -D playwright && npx playwright install chromium',
+      ],
+    }
+  }
+
+  const results: SelectorValidationResult[] = []
+  const errors: string[] = []
+
+  let browser: Browser | null = null
+
+  try {
+    console.log(`🌐 Launching browser...`)
+    try {
+      browser = await playwright.chromium.launch({ headless: true })
+    } catch (launchError) {
+      const errorMsg = launchError instanceof Error ? launchError.message : String(launchError)
+      if (errorMsg.includes("Executable doesn't exist")) {
+        errors.push(
+          'Playwright browser not installed. Run: npx playwright install chromium'
+        )
+      } else {
+        errors.push(`Failed to launch browser: ${errorMsg}`)
+      }
+      return { results, errors }
+    }
+    const page = await browser.newPage()
+
+    console.log(`📄 Navigating to ${url}...`)
+    try {
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
+    } catch (navError) {
+      errors.push(`Failed to navigate to ${url}: ${navError}`)
+      return { results, errors }
+    }
+
+    // Wait a bit for any dynamic content
+    await page.waitForTimeout(1000)
+
+    console.log(`🔍 Testing selectors...\n`)
+
+    // Test each target's selectors
+    for (const target of manifest.targets) {
+      const strategies = target.selector?.strategies ?? []
+
+      for (const strategy of strategies) {
+        const selector = strategyToPlaywrightSelector(strategy)
+        let found = false
+        let elementCount = 0
+        let error: string | undefined
+
+        try {
+          const elements = await page.locator(selector).all()
+          elementCount = elements.length
+          found = elementCount > 0
+        } catch (e) {
+          error = e instanceof Error ? e.message : String(e)
+        }
+
+        results.push({
+          targetId: target.id,
+          strategy,
+          found,
+          elementCount,
+          error,
+        })
+      }
+
+      // Also test path step selectors if flows validation is needed
+      if (target.path) {
+        for (let i = 0; i < target.path.length; i++) {
+          const step = target.path[i]
+          const stepStrategies = step.selector?.strategies ?? []
+
+          for (const strategy of stepStrategies) {
+            const selector = strategyToPlaywrightSelector(strategy)
+            let found = false
+            let elementCount = 0
+            let error: string | undefined
+
+            try {
+              const elements = await page.locator(selector).all()
+              elementCount = elements.length
+              found = elementCount > 0
+            } catch (e) {
+              error = e instanceof Error ? e.message : String(e)
+            }
+
+            results.push({
+              targetId: `${target.id} (path step ${i + 1})`,
+              strategy,
+              found,
+              elementCount,
+              error,
+            })
+          }
+        }
+      }
+    }
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
+  }
+
+  return { results, errors }
+}
+
+/**
  * Validate a manifest file
  */
 export async function validate(options: ValidateOptions = {}): Promise<void> {
@@ -204,6 +366,65 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
     result.errors.push(`Duplicate target IDs: ${[...new Set(duplicates)].join(', ')}`)
   }
 
+  // Validate selectors against live page (if --url flag)
+  let liveValidationResults: SelectorValidationResult[] = []
+  if (options.url) {
+    console.log('') // Add spacing
+    const { results: liveResults, errors: liveErrors } = await validateSelectorsWithPlaywright(
+      manifest,
+      options.url
+    )
+
+    if (liveErrors.length > 0) {
+      result.errors.push(...liveErrors)
+      result.valid = false
+    } else {
+      liveValidationResults = liveResults
+
+      // Group results by target
+      const byTarget = new Map<string, SelectorValidationResult[]>()
+      for (const r of liveResults) {
+        const existing = byTarget.get(r.targetId) ?? []
+        existing.push(r)
+        byTarget.set(r.targetId, existing)
+      }
+
+      // Check each target has at least one working selector
+      for (const [targetId, strategies] of byTarget) {
+        const anyFound = strategies.some((s) => s.found)
+        if (!anyFound) {
+          result.valid = false
+          const strategyList = strategies
+            .map((s) => `${s.strategy.type}:${s.strategy.value}`)
+            .join(', ')
+          result.errors.push(`${targetId}: No selector found element on page (tried: ${strategyList})`)
+        }
+      }
+
+      // Report detailed results
+      console.log('🌐 Live Page Validation:')
+      for (const [targetId, strategies] of byTarget) {
+        const working = strategies.filter((s) => s.found)
+        const failing = strategies.filter((s) => !s.found)
+
+        if (working.length > 0 && failing.length === 0) {
+          console.log(`   ✅ ${targetId}: All ${working.length} selectors found`)
+        } else if (working.length > 0) {
+          console.log(`   ⚠️  ${targetId}: ${working.length}/${strategies.length} selectors found`)
+          for (const f of failing) {
+            console.log(`      ❌ ${f.strategy.type}:${f.strategy.value}`)
+          }
+        } else {
+          console.log(`   ❌ ${targetId}: No selectors found`)
+          for (const f of failing) {
+            console.log(`      ❌ ${f.strategy.type}:${f.strategy.value}`)
+          }
+        }
+      }
+      console.log('')
+    }
+  }
+
   // Print results
   if (result.errors.length > 0) {
     console.log('❌ Errors:')
@@ -222,6 +443,13 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
   console.log(`   - Targets: ${manifest.targets.length}`)
   console.log(`   - Errors: ${result.errors.length}`)
   console.log(`   - Warnings: ${result.warnings.length}`)
+
+  if (liveValidationResults.length > 0) {
+    const found = liveValidationResults.filter((r) => r.found).length
+    const total = liveValidationResults.length
+    console.log(`   - Selectors tested: ${found}/${total} found`)
+  }
+
   console.log('')
 
   if (result.valid) {
