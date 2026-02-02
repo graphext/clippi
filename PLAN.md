@@ -1,7 +1,7 @@
 # Clippi - Design Document v1
 
 > **Date:** January 2026
-> **Status:** v0.1 implementation ~90% complete, pending validation
+> **Status:** v0.1 implementation complete, pending validation
 > **Domain:** clippi.net (available)
 
 ---
@@ -1377,7 +1377,7 @@ The original v1 scope was too large, risking a half-finished product. We now ado
 
 **Documentation:**
 - [x] Manifest schema reference
-- [ ] Integration guide (widget, headless, logic-only)
+- [x] Integration guide (widget, headless, logic-only)
 - [x] Reference backend implementation (Node.js)
 - [x] Example app with 5-10 flows
 
