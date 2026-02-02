@@ -2,6 +2,7 @@ import { Command } from 'commander'
 import { init } from './commands/init.js'
 import { serve } from './commands/serve.js'
 import { validate } from './commands/validate.js'
+import { generate } from './commands/generate.js'
 
 const program = new Command()
 
@@ -50,6 +51,33 @@ program
       flows: options.flows,
       url: options.url,
       e2e: options.e2e,
+    })
+  })
+
+// Generate command
+program
+  .command('generate')
+  .description('Generate manifest using AI agent + Browser Use')
+  .option('-u, --url <url>', 'URL of the application to explore')
+  .option('-t, --tasks <path>', 'Path to tasks file (one task per line, or JSON)')
+  .option('-o, --output <path>', 'Output path for manifest', 'guide.manifest.json')
+  .option('-p, --provider <provider>', 'LLM provider (gemini, openai, anthropic)', 'gemini')
+  .option('--model <model>', 'Model name', 'gemini-2.0-flash')
+  .option('--no-headless', 'Run browser with visible UI')
+  .option('-d, --docs <path>', 'Path to documentation file for context')
+  .option('--timeout <ms>', 'Timeout for operations in ms', '30000')
+  .option('-c, --config <path>', 'Path to JSON config file')
+  .action(async (options) => {
+    await generate({
+      url: options.url,
+      tasks: options.tasks,
+      output: options.output,
+      provider: options.provider,
+      model: options.model,
+      headless: options.headless,
+      docs: options.docs,
+      timeout: options.timeout ? parseInt(options.timeout, 10) : undefined,
+      config: options.config,
     })
   })
 

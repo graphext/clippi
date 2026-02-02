@@ -1,0 +1,21 @@
+{
+  "url": "https://example.com",
+  "tasks": [
+    {
+      "description": "export data to CSV",
+      "id": "export-csv",
+      "category": "data",
+      "keywords": ["download", "export", "csv"]
+    },
+    {
+      "description": "create a new dataset",
+      "id": "create-dataset",
+      "category": "data"
+    }
+  ],
+  "provider": "gemini",
+  "model": "gemini-2.0-flash",
+  "headless": true,
+  "timeout_ms": 30000,
+  "output_path": "guide.manifest.json"
+}
