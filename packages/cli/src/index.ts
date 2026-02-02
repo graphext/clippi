@@ -42,12 +42,14 @@ program
   .option('-c, --conditions', 'Validate condition syntax')
   .option('-f, --flows', 'Validate flow paths')
   .option('-u, --url <url>', 'URL to validate selectors against (requires playwright)')
+  .option('-e, --e2e', 'Run end-to-end path validation (clicks through flows, requires --url)')
   .action(async (options) => {
     await validate({
       manifest: options.manifest,
       conditions: options.conditions,
       flows: options.flows,
       url: options.url,
+      e2e: options.e2e,
     })
   })
 

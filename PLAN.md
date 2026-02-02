@@ -1,7 +1,7 @@
 # Clippi - Design Document v1
 
-> **Date:** January 2026  
-> **Status:** Design complete, pending implementation  
+> **Date:** January 2026
+> **Status:** v0.1 implementation complete, pending validation
 > **Domain:** clippi.net (available)
 
 ---
@@ -1352,34 +1352,34 @@ The original v1 scope was too large, risking a half-finished product. We now ado
 **Goal:** Validate core UX with minimal scope. Developers manually create manifests.
 
 **Setup:**
-- [ ] CLI: `init`, `serve` (dev server with hot reload)
-- [ ] Manual manifest creation (documented schema + examples)
-- [ ] `clippi validate` (selector validation in headless browser)
+- [x] CLI: `init`, `serve` (dev server with hot reload)
+- [x] Manual manifest creation (documented schema + examples)
+- [x] `clippi validate` (selector validation in headless browser)
 
 **Runtime (@clippi/core):**
-- [ ] Manifest matching (local, no LLM)
-- [ ] Actionability checks
-- [ ] Step sequencer + MutationObserver
-- [ ] sessionStorage persistence
-- [ ] Basic conditions (plan, permissions)
+- [x] Manifest matching (local, no LLM)
+- [x] Actionability checks
+- [x] Step sequencer + MutationObserver
+- [x] sessionStorage persistence
+- [x] Basic conditions (plan, permissions)
 
 **Visual (@clippi/cursor):**
-- [ ] Animated ghost cursor
-- [ ] Tooltips with instructions
-- [ ] Element highlights
-- [ ] Confirmation fallback ("Did you do it?")
+- [x] Animated ghost cursor
+- [x] Tooltips with instructions
+- [x] Element highlights
+- [x] Confirmation fallback ("Did you do it?")
 
 **Integration (@clippi/chat):**
-- [ ] `<clippi-chat />` widget
-- [ ] Headless API
-- [ ] Backend proxy pattern
-- [ ] Event hooks (beforeGuide, stepCompleted, blocked)
+- [x] `<clippi-chat />` widget
+- [x] Headless API
+- [x] Backend proxy pattern
+- [x] Event hooks (beforeGuide, stepCompleted, blocked)
 
 **Documentation:**
-- [ ] Manifest schema reference
-- [ ] Integration guide (widget, headless, logic-only)
-- [ ] Reference backend implementation (Node.js)
-- [ ] Example app with 5-10 flows
+- [x] Manifest schema reference
+- [x] Integration guide (widget, headless, logic-only)
+- [x] Reference backend implementation (Node.js)
+- [x] Example app with 5-10 flows
 
 **NOT in v0.1:**
 - No AI agent / Browser Use
