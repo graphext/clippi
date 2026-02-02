@@ -13,6 +13,7 @@ import {
  * Playwright types (dynamically imported)
  */
 type Browser = Awaited<ReturnType<typeof import('playwright')['chromium']['launch']>>
+type Page = Awaited<ReturnType<Browser['newPage']>>
 
 /**
  * Validate command options
@@ -22,6 +23,7 @@ export interface ValidateOptions {
   conditions?: boolean
   flows?: boolean
   url?: string
+  e2e?: boolean
 }
 
 /**
@@ -297,6 +299,330 @@ async function validateSelectorsWithPlaywright(
 }
 
 /**
+ * Result of e2e path validation
+ */
+interface E2EPathResult {
+  targetId: string
+  success: boolean
+  stepsCompleted: number
+  totalSteps: number
+  failedAt?: {
+    step: number
+    reason: string
+  }
+}
+
+/**
+ * Check if a success condition is met on the page
+ */
+async function checkSuccessCondition(
+  page: Page,
+  condition: Record<string, unknown>
+): Promise<{ met: boolean; reason?: string }> {
+  // Check URL conditions
+  if (condition.url_contains) {
+    const url = page.url()
+    if (!url.includes(condition.url_contains as string)) {
+      return { met: false, reason: `URL doesn't contain "${condition.url_contains}"` }
+    }
+  }
+
+  if (condition.url_matches) {
+    const url = page.url()
+    const regex = new RegExp(condition.url_matches as string)
+    if (!regex.test(url)) {
+      return { met: false, reason: `URL doesn't match pattern "${condition.url_matches}"` }
+    }
+  }
+
+  // Check visibility conditions
+  if (condition.visible) {
+    const selector = condition.visible as string
+    try {
+      const isVisible = await page.locator(selector).isVisible({ timeout: 100 })
+      if (!isVisible) {
+        return { met: false, reason: `Element "${selector}" not visible` }
+      }
+    } catch {
+      return { met: false, reason: `Element "${selector}" not found` }
+    }
+  }
+
+  // Check existence conditions
+  if (condition.exists) {
+    const selector = condition.exists as string
+    try {
+      const count = await page.locator(selector).count()
+      if (count === 0) {
+        return { met: false, reason: `Element "${selector}" doesn't exist` }
+      }
+    } catch {
+      return { met: false, reason: `Element "${selector}" not found` }
+    }
+  }
+
+  // Check value conditions
+  if (condition.value && typeof condition.value === 'object') {
+    const valueCondition = condition.value as {
+      selector: string
+      equals?: string
+      contains?: string
+      not_empty?: boolean
+    }
+    try {
+      const element = page.locator(valueCondition.selector)
+      const value = await element.inputValue().catch(() => element.textContent())
+
+      if (valueCondition.equals !== undefined && value !== valueCondition.equals) {
+        return { met: false, reason: `Value "${value}" doesn't equal "${valueCondition.equals}"` }
+      }
+      if (valueCondition.contains !== undefined && !value?.includes(valueCondition.contains)) {
+        return { met: false, reason: `Value "${value}" doesn't contain "${valueCondition.contains}"` }
+      }
+      if (valueCondition.not_empty && (!value || value.trim() === '')) {
+        return { met: false, reason: `Value is empty` }
+      }
+    } catch {
+      return { met: false, reason: `Element "${valueCondition.selector}" not found` }
+    }
+  }
+
+  // Check attribute conditions
+  if (condition.attribute && typeof condition.attribute === 'object') {
+    const attrCondition = condition.attribute as {
+      selector: string
+      name: string
+      value: string
+    }
+    try {
+      const element = page.locator(attrCondition.selector)
+      const attrValue = await element.getAttribute(attrCondition.name)
+      if (attrValue !== attrCondition.value) {
+        return {
+          met: false,
+          reason: `Attribute "${attrCondition.name}" is "${attrValue}", expected "${attrCondition.value}"`,
+        }
+      }
+    } catch {
+      return { met: false, reason: `Element "${attrCondition.selector}" not found` }
+    }
+  }
+
+  // Click condition - just means "clicked", we assume it's met after clicking
+  if (condition.click) {
+    return { met: true }
+  }
+
+  return { met: true }
+}
+
+/**
+ * Execute a single path end-to-end
+ */
+async function executePath(
+  page: Page,
+  target: ManifestTarget,
+  url: string
+): Promise<E2EPathResult> {
+  const result: E2EPathResult = {
+    targetId: target.id,
+    success: false,
+    stepsCompleted: 0,
+    totalSteps: target.path?.length ?? 0,
+  }
+
+  if (!target.path || target.path.length === 0) {
+    // Single-step target - just click it
+    result.totalSteps = 1
+    try {
+      const strategies = target.selector?.strategies ?? []
+      let clicked = false
+
+      for (const strategy of strategies) {
+        const selector = strategyToPlaywrightSelector(strategy)
+        try {
+          await page.locator(selector).first().click({ timeout: 5000 })
+          clicked = true
+          break
+        } catch {
+          continue
+        }
+      }
+
+      if (clicked) {
+        result.stepsCompleted = 1
+        result.success = true
+      } else {
+        result.failedAt = { step: 1, reason: 'Could not find/click target element' }
+      }
+    } catch (e) {
+      result.failedAt = { step: 1, reason: e instanceof Error ? e.message : String(e) }
+    }
+    return result
+  }
+
+  // Multi-step path
+  for (let i = 0; i < target.path.length; i++) {
+    const step = target.path[i]
+    const stepNum = i + 1
+
+    try {
+      // Find and click the element
+      const strategies = step.selector?.strategies ?? []
+      let clicked = false
+
+      for (const strategy of strategies) {
+        const selector = strategyToPlaywrightSelector(strategy)
+        try {
+          const locator = page.locator(selector).first()
+
+          // Wait for element to be visible and clickable
+          await locator.waitFor({ state: 'visible', timeout: 5000 })
+
+          // Scroll into view if needed
+          await locator.scrollIntoViewIfNeeded()
+
+          // Click
+          await locator.click({ timeout: 5000 })
+          clicked = true
+          break
+        } catch {
+          continue
+        }
+      }
+
+      if (!clicked) {
+        result.failedAt = { step: stepNum, reason: `Could not find/click element for step ${stepNum}` }
+        return result
+      }
+
+      // Wait for success condition (if defined)
+      if (step.success_condition) {
+        // Poll for condition with timeout
+        const maxWait = 10000
+        const pollInterval = 200
+        let elapsed = 0
+        let conditionMet = false
+        let lastReason = ''
+
+        while (elapsed < maxWait) {
+          const check = await checkSuccessCondition(page, step.success_condition as Record<string, unknown>)
+          if (check.met) {
+            conditionMet = true
+            break
+          }
+          lastReason = check.reason ?? 'Unknown'
+          await page.waitForTimeout(pollInterval)
+          elapsed += pollInterval
+        }
+
+        if (!conditionMet) {
+          result.failedAt = {
+            step: stepNum,
+            reason: `Success condition not met after ${maxWait}ms: ${lastReason}`,
+          }
+          return result
+        }
+      } else {
+        // No success condition - wait a bit for any transitions
+        await page.waitForTimeout(500)
+      }
+
+      result.stepsCompleted = stepNum
+    } catch (e) {
+      result.failedAt = { step: stepNum, reason: e instanceof Error ? e.message : String(e) }
+      return result
+    }
+  }
+
+  result.success = true
+  return result
+}
+
+/**
+ * Run end-to-end validation for all paths
+ */
+async function validateE2E(
+  manifest: Manifest,
+  url: string
+): Promise<{ results: E2EPathResult[]; errors: string[] }> {
+  // Dynamically import Playwright
+  let playwright
+  try {
+    playwright = await import('playwright')
+  } catch {
+    return {
+      results: [],
+      errors: [
+        'Playwright is not installed. Run: npx playwright install chromium',
+        'Or install with: pnpm add -D playwright && npx playwright install chromium',
+      ],
+    }
+  }
+
+  const results: E2EPathResult[] = []
+  const errors: string[] = []
+
+  let browser: Browser | null = null
+
+  try {
+    console.log(`🌐 Launching browser for E2E validation...`)
+    try {
+      const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      browser = await playwright.chromium.launch({
+        headless: true,
+        executablePath: executablePath || undefined,
+      })
+    } catch (launchError) {
+      const errorMsg = launchError instanceof Error ? launchError.message : String(launchError)
+      if (errorMsg.includes("Executable doesn't exist")) {
+        errors.push('Playwright browser not installed. Run: npx playwright install chromium')
+      } else {
+        errors.push(`Failed to launch browser: ${errorMsg}`)
+      }
+      return { results, errors }
+    }
+
+    const targetsWithPaths = manifest.targets.filter((t) => t.path && t.path.length > 0)
+    console.log(`🔍 Testing ${targetsWithPaths.length} paths end-to-end...\n`)
+
+    for (const target of targetsWithPaths) {
+      // Create a fresh page for each path
+      const page = await browser.newPage()
+
+      try {
+        // Navigate to start URL
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 })
+        await page.waitForTimeout(500)
+
+        // Execute the path
+        process.stdout.write(`   ⏳ ${target.id}...`)
+        const pathResult = await executePath(page, target, url)
+        results.push(pathResult)
+
+        // Report result
+        if (pathResult.success) {
+          console.log(`\r   ✅ ${target.id}: ${pathResult.stepsCompleted}/${pathResult.totalSteps} steps completed`)
+        } else {
+          console.log(
+            `\r   ❌ ${target.id}: Failed at step ${pathResult.failedAt?.step}/${pathResult.totalSteps}`
+          )
+          console.log(`      Reason: ${pathResult.failedAt?.reason}`)
+        }
+      } finally {
+        await page.close()
+      }
+    }
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
+  }
+
+  return { results, errors }
+}
+
+/**
  * Validate a manifest file
  */
 export async function validate(options: ValidateOptions = {}): Promise<void> {
@@ -430,6 +756,44 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
     }
   }
 
+  // Run E2E validation (if --e2e flag and --url provided)
+  let e2eResults: E2EPathResult[] = []
+  if (options.e2e) {
+    if (!options.url) {
+      result.errors.push('--e2e requires --url flag to specify the application URL')
+      result.valid = false
+    } else {
+      console.log('') // Add spacing
+      const { results: e2eTestResults, errors: e2eErrors } = await validateE2E(manifest, options.url)
+
+      if (e2eErrors.length > 0) {
+        result.errors.push(...e2eErrors)
+        result.valid = false
+      } else {
+        e2eResults = e2eTestResults
+
+        // Report e2e summary
+        console.log('')
+        console.log('🎯 E2E Path Validation:')
+
+        const passed = e2eResults.filter((r) => r.success).length
+        const failed = e2eResults.filter((r) => !r.success).length
+
+        if (failed > 0) {
+          result.valid = false
+          for (const failedResult of e2eResults.filter((r) => !r.success)) {
+            result.errors.push(
+              `${failedResult.targetId}: E2E failed at step ${failedResult.failedAt?.step} - ${failedResult.failedAt?.reason}`
+            )
+          }
+        }
+
+        console.log(`   Passed: ${passed}/${e2eResults.length}`)
+        console.log('')
+      }
+    }
+  }
+
   // Print results
   if (result.errors.length > 0) {
     console.log('❌ Errors:')
@@ -453,6 +817,11 @@ export async function validate(options: ValidateOptions = {}): Promise<void> {
     const found = liveValidationResults.filter((r) => r.found).length
     const total = liveValidationResults.length
     console.log(`   - Selectors tested: ${found}/${total} found`)
+  }
+
+  if (e2eResults.length > 0) {
+    const passed = e2eResults.filter((r) => r.success).length
+    console.log(`   - E2E paths: ${passed}/${e2eResults.length} passed`)
   }
 
   console.log('')
