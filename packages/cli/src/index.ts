@@ -62,7 +62,7 @@ program
   .option('-t, --tasks <path>', 'Path to tasks file (one task per line, or JSON)')
   .option('-o, --output <path>', 'Output path for manifest', 'guide.manifest.json')
   .option('-p, --provider <provider>', 'LLM provider (gemini, openai, anthropic)', 'gemini')
-  .option('--model <model>', 'Model name', 'gemini-2.0-flash')
+  .option('--model <model>', 'Model name', 'gemini-3-flash-preview')
   .option('--no-headless', 'Run browser with visible UI')
   .option('-d, --docs <path>', 'Path to documentation file for context')
   .option('--timeout <ms>', 'Timeout for operations in ms', '30000')

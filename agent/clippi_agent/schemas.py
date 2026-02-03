@@ -59,7 +59,7 @@ class AgentConfig(BaseModel):
         description="LLM provider to use",
     )
     model: str = Field(
-        default="gemini-2.0-flash",
+        default="gemini-3-flash-preview",
         description="Model name/ID to use",
     )
 

@@ -142,8 +142,8 @@ Environment variables:
         "--model",
         "-m",
         type=str,
-        default="gemini-2.0-flash",
-        help="Model name (default: gemini-2.0-flash)",
+        default="gemini-3-flash-preview",
+        help="Model name (default: gemini-3-flash-preview)",
     )
     parser.add_argument(
         "--headless",
