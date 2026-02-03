@@ -1,6 +1,6 @@
 # Clippi Agent
 
-AI-powered manifest generation using Browser Use + Gemini 2.0 Flash.
+AI-powered manifest generation using Browser Use + Gemini 3 Flash.
 
 ## Overview
 
@@ -78,7 +78,7 @@ Or use JSON for more control:
 | `--tasks, -t` | Path to tasks file | Required |
 | `--output, -o` | Output manifest path | `guide.manifest.json` |
 | `--provider, -p` | LLM provider | `gemini` |
-| `--model, -m` | Model name | `gemini-2.0-flash` |
+| `--model, -m` | Model name | `gemini-3-flash-preview` |
 | `--no-headless` | Show browser UI | `false` |
 | `--docs, -d` | Path to docs for context | - |
 | `--timeout` | Operation timeout (ms) | `30000` |
@@ -96,7 +96,7 @@ Instead of CLI arguments, you can use a JSON config:
     { "description": "create dataset", "category": "data" }
   ],
   "provider": "gemini",
-  "model": "gemini-2.0-flash",
+  "model": "gemini-3-flash-preview",
   "headless": true,
   "output_path": "guide.manifest.json"
 }
