@@ -1,203 +1,310 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clippi Recorder</title>
-  <link rel="stylesheet" href="sidepanel.css">
-</head>
-<body>
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
-      <h1 class="logo">📋 Clippi</h1>
-      <span class="version">v0.1</span>
-    </header>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clippi Recorder</title>
+        <link rel="stylesheet" href="sidepanel.css" />
+    </head>
+    <body>
+        <div class="container">
+            <!-- Header -->
+            <header class="header">
+                <h1 class="logo">📋 Clippi</h1>
+                <span class="version">v0.1</span>
+            </header>
 
-    <!-- Recording Controls -->
-    <section class="recording-controls">
-      <div class="recording-status" id="recordingStatus">
-        <span class="status-dot idle"></span>
-        <span class="status-text">Ready to record</span>
-      </div>
-      <div class="control-buttons">
-        <button id="btnStartRecording" class="btn btn-primary" title="Start Recording">
-          <span class="icon">●</span> Record
-        </button>
-        <button id="btnPauseRecording" class="btn btn-secondary" title="Pause" disabled>
-          <span class="icon">⏸</span>
-        </button>
-        <button id="btnStopRecording" class="btn btn-danger" title="Stop" disabled>
-          <span class="icon">■</span>
-        </button>
-      </div>
-    </section>
+            <!-- Recording Controls -->
+            <section class="recording-controls">
+                <div class="recording-status" id="recordingStatus">
+                    <span class="status-dot idle"></span>
+                    <span class="status-text">Ready to record</span>
+                </div>
+                <div class="control-buttons">
+                    <button
+                        id="btnStartRecording"
+                        class="btn btn-primary"
+                        title="Start Recording"
+                    >
+                        <span class="icon">●</span> Record
+                    </button>
+                    <button
+                        id="btnPauseRecording"
+                        class="btn btn-secondary"
+                        title="Pause"
+                        disabled
+                    >
+                        <span class="icon">⏸</span>
+                    </button>
+                    <button
+                        id="btnStopRecording"
+                        class="btn btn-danger"
+                        title="Stop"
+                        disabled
+                    >
+                        <span class="icon">■</span>
+                    </button>
+                </div>
+            </section>
 
-    <!-- Tabs -->
-    <nav class="tabs">
-      <button class="tab active" data-tab="targets">Targets</button>
-      <button class="tab" data-tab="editor">Editor</button>
-    </nav>
+            <!-- Targets List View -->
+            <section class="view active" id="targetsView">
+                <div class="targets-header">
+                    <h2>Recorded Targets</h2>
+                    <button id="btnNewTarget" class="btn btn-small btn-primary">
+                        + New
+                    </button>
+                </div>
+                <ul class="targets-list" id="targetsList">
+                    <li class="empty-state">
+                        No targets yet. Click "+ New" to create one.
+                    </li>
+                </ul>
+                <div class="targets-footer">
+                    <button id="btnImport" class="btn btn-secondary btn-small">
+                        Import
+                    </button>
+                    <button id="btnExport" class="btn btn-primary btn-small">
+                        Export Manifest
+                    </button>
+                </div>
+            </section>
 
-    <!-- Targets List Tab -->
-    <section class="tab-content active" id="targetsTab">
-      <div class="targets-header">
-        <h2>Recorded Targets</h2>
-        <button id="btnNewTarget" class="btn btn-small btn-primary">+ New</button>
-      </div>
-      <ul class="targets-list" id="targetsList">
-        <li class="empty-state">No targets yet. Click "+ New" to create one.</li>
-      </ul>
-    </section>
+            <!-- Editor View -->
+            <section class="view" id="editorView">
+                <div class="editor-header">
+                    <button
+                        id="btnBack"
+                        class="btn-back"
+                        title="Back to targets"
+                    >
+                        ←
+                    </button>
+                    <span id="editorTitle" class="editor-title"
+                        >Edit Target</span
+                    >
+                    <div class="editor-header-spacer"></div>
+                </div>
 
-    <!-- Editor Tab -->
-    <section class="tab-content" id="editorTab">
-      <div class="editor-empty" id="editorEmpty">
-        <p>Select a target to edit</p>
-      </div>
+                <form class="editor-form" id="editorForm">
+                    <div class="form-group">
+                        <label for="targetId">ID</label>
+                        <input
+                            type="text"
+                            id="targetId"
+                            placeholder="export-csv"
+                            required
+                        />
+                    </div>
 
-      <form class="editor-form" id="editorForm" style="display: none;">
-        <div class="form-group">
-          <label for="targetId">ID</label>
-          <input type="text" id="targetId" placeholder="export-csv" required>
+                    <div class="form-group">
+                        <label for="targetLabel">Label</label>
+                        <input
+                            type="text"
+                            id="targetLabel"
+                            placeholder="Export to CSV"
+                            required
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="targetDescription">Description</label>
+                        <textarea
+                            id="targetDescription"
+                            rows="2"
+                            placeholder="Export current data to CSV format"
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="targetKeywords"
+                            >Keywords
+                            <span class="hint">(comma-separated)</span></label
+                        >
+                        <input
+                            type="text"
+                            id="targetKeywords"
+                            placeholder="export, download, csv"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="targetCategory">Category</label>
+                        <select id="targetCategory">
+                            <option value="general">General</option>
+                            <option value="data">Data</option>
+                            <option value="settings">Settings</option>
+                            <option value="account">Account</option>
+                            <option value="navigation">Navigation</option>
+                            <option value="support">Support</option>
+                        </select>
+                    </div>
+
+                    <!-- Steps Section -->
+                    <div class="steps-section">
+                        <div class="steps-header">
+                            <h3>Steps</h3>
+                            <span class="step-count" id="stepCount"
+                                >0 steps</span
+                            >
+                        </div>
+                        <ul class="steps-list" id="stepsList">
+                            <li class="empty-state">No steps recorded yet</li>
+                        </ul>
+                    </div>
+
+                    <div class="form-actions">
+                        <span id="savedIndicator" class="saved-indicator"
+                            >Saved</span
+                        >
+                    </div>
+                </form>
+            </section>
         </div>
 
-        <div class="form-group">
-          <label for="targetLabel">Label</label>
-          <input type="text" id="targetLabel" placeholder="Export to CSV" required>
-        </div>
+        <!-- Step Edit Modal -->
+        <dialog id="stepModal" class="modal">
+            <form method="dialog" class="modal-content">
+                <h3>Edit Step</h3>
 
-        <div class="form-group">
-          <label for="targetDescription">Description</label>
-          <textarea id="targetDescription" rows="2" placeholder="Export current data to CSV format"></textarea>
-        </div>
+                <div class="form-group">
+                    <label for="stepInstruction">Instruction</label>
+                    <input
+                        type="text"
+                        id="stepInstruction"
+                        placeholder="Click on the Export button"
+                    />
+                </div>
 
-        <div class="form-group">
-          <label for="targetKeywords">Keywords <span class="hint">(comma-separated)</span></label>
-          <input type="text" id="targetKeywords" placeholder="export, download, csv">
-        </div>
+                <div class="form-group">
+                    <label for="stepAction">Action</label>
+                    <select id="stepAction">
+                        <option value="click">Click</option>
+                        <option value="type">Type</option>
+                        <option value="select">Select</option>
+                        <option value="clear">Clear</option>
+                    </select>
+                </div>
 
-        <div class="form-group">
-          <label for="targetCategory">Category</label>
-          <select id="targetCategory">
-            <option value="general">General</option>
-            <option value="data">Data</option>
-            <option value="settings">Settings</option>
-            <option value="account">Account</option>
-            <option value="navigation">Navigation</option>
-            <option value="support">Support</option>
-          </select>
-        </div>
+                <div
+                    class="form-group"
+                    id="stepInputGroup"
+                    style="display: none"
+                >
+                    <label for="stepInput">Input Value</label>
+                    <input
+                        type="text"
+                        id="stepInput"
+                        placeholder="Value to type or select"
+                    />
+                </div>
 
-        <!-- Steps Section -->
-        <div class="steps-section">
-          <div class="steps-header">
-            <h3>Steps</h3>
-            <span class="step-count" id="stepCount">0 steps</span>
-          </div>
-          <ul class="steps-list" id="stepsList">
-            <li class="empty-state">No steps recorded yet</li>
-          </ul>
-        </div>
+                <div class="form-group">
+                    <label
+                        >Success Condition
+                        <span class="hint">(optional)</span></label
+                    >
+                    <div class="condition-inputs">
+                        <input
+                            type="text"
+                            id="stepUrlContains"
+                            placeholder="URL contains..."
+                        />
+                        <input
+                            type="text"
+                            id="stepVisible"
+                            placeholder="Selector visible..."
+                        />
+                    </div>
+                </div>
 
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Save Changes</button>
-          <button type="button" id="btnDeleteTarget" class="btn btn-danger">Delete</button>
-        </div>
-      </form>
-    </section>
+                <div class="selector-preview">
+                    <label>Selector Strategies</label>
+                    <pre id="selectorPreview"></pre>
+                </div>
 
-    <!-- Footer Actions -->
-    <footer class="footer">
-      <button id="btnImport" class="btn btn-secondary btn-small">Import</button>
-      <button id="btnExport" class="btn btn-primary btn-small">Export Manifest</button>
-    </footer>
-  </div>
+                <div class="modal-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        id="btnCancelStep"
+                    >
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </dialog>
 
-  <!-- Step Edit Modal -->
-  <dialog id="stepModal" class="modal">
-    <form method="dialog" class="modal-content">
-      <h3>Edit Step</h3>
+        <!-- New Target Modal -->
+        <dialog id="newTargetModal" class="modal">
+            <form method="dialog" class="modal-content">
+                <h3>New Target</h3>
 
-      <div class="form-group">
-        <label for="stepInstruction">Instruction</label>
-        <input type="text" id="stepInstruction" placeholder="Click on the Export button">
-      </div>
+                <div class="form-group">
+                    <label for="newTargetId">ID</label>
+                    <input
+                        type="text"
+                        id="newTargetId"
+                        placeholder="export-csv"
+                        required
+                    />
+                </div>
 
-      <div class="form-group">
-        <label for="stepAction">Action</label>
-        <select id="stepAction">
-          <option value="click">Click</option>
-          <option value="type">Type</option>
-          <option value="select">Select</option>
-          <option value="clear">Clear</option>
-        </select>
-      </div>
+                <div class="form-group">
+                    <label for="newTargetLabel">Label</label>
+                    <input
+                        type="text"
+                        id="newTargetLabel"
+                        placeholder="Export to CSV"
+                        required
+                    />
+                </div>
 
-      <div class="form-group" id="stepInputGroup" style="display: none;">
-        <label for="stepInput">Input Value</label>
-        <input type="text" id="stepInput" placeholder="Value to type or select">
-      </div>
+                <div class="modal-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        id="btnCancelNewTarget"
+                    >
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Create & Start Recording
+                    </button>
+                </div>
+            </form>
+        </dialog>
 
-      <div class="form-group">
-        <label>Success Condition <span class="hint">(optional)</span></label>
-        <div class="condition-inputs">
-          <input type="text" id="stepUrlContains" placeholder="URL contains...">
-          <input type="text" id="stepVisible" placeholder="Selector visible...">
-        </div>
-      </div>
+        <!-- Import Modal -->
+        <dialog id="importModal" class="modal">
+            <form method="dialog" class="modal-content">
+                <h3>Import Manifest</h3>
 
-      <div class="selector-preview">
-        <label>Selector Strategies</label>
-        <pre id="selectorPreview"></pre>
-      </div>
+                <div class="form-group">
+                    <label for="importJson">Paste manifest JSON</label>
+                    <textarea
+                        id="importJson"
+                        rows="10"
+                        placeholder='{"targets": [...]}'
+                    ></textarea>
+                </div>
 
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" id="btnCancelStep">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
-    </form>
-  </dialog>
+                <div class="modal-actions">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        id="btnCancelImport"
+                    >
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Import
+                    </button>
+                </div>
+            </form>
+        </dialog>
 
-  <!-- New Target Modal -->
-  <dialog id="newTargetModal" class="modal">
-    <form method="dialog" class="modal-content">
-      <h3>New Target</h3>
-
-      <div class="form-group">
-        <label for="newTargetId">ID</label>
-        <input type="text" id="newTargetId" placeholder="export-csv" required>
-      </div>
-
-      <div class="form-group">
-        <label for="newTargetLabel">Label</label>
-        <input type="text" id="newTargetLabel" placeholder="Export to CSV" required>
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" id="btnCancelNewTarget">Cancel</button>
-        <button type="submit" class="btn btn-primary">Create & Start Recording</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- Import Modal -->
-  <dialog id="importModal" class="modal">
-    <form method="dialog" class="modal-content">
-      <h3>Import Manifest</h3>
-
-      <div class="form-group">
-        <label for="importJson">Paste manifest JSON</label>
-        <textarea id="importJson" rows="10" placeholder='{"targets": [...]}'></textarea>
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" id="btnCancelImport">Cancel</button>
-        <button type="submit" class="btn btn-primary">Import</button>
-      </div>
-    </form>
-  </dialog>
-
-  <script type="module" src="sidepanel.js"></script>
-</body>
+        <script type="module" src="sidepanel.js"></script>
+    </body>
 </html>
