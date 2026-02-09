@@ -17,6 +17,10 @@
     "manifest"
   ],
   "license": "MIT",
+  "dependencies": {
+    "@clippi/core": "workspace:*",
+    "@clippi/cursor": "workspace:*"
+  },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
     "tsup": "^8.3.0",

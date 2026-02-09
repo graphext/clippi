@@ -1,23 +1,28 @@
-import { isActionable, scrollIntoViewIfNeeded } from '@clippi/core'
-import { GhostCursor } from './cursor/ghost-cursor.js'
-import { Tooltip } from './tooltip/tooltip.js'
-import { Highlight } from './highlight/highlight.js'
-import { ConfirmationFallback } from './confirmation/fallback.js'
-import { applyTheme, resolveTheme, watchSystemTheme, type ThemeOption } from './themes/apply.js'
-import { themes } from './themes/presets.js'
+import { isActionable, scrollIntoViewIfNeeded } from "@clippi/core";
+import { GhostCursor } from "./cursor/ghost-cursor.js";
+import { Tooltip } from "./tooltip/tooltip.js";
+import { Highlight } from "./highlight/highlight.js";
+import { ConfirmationFallback } from "./confirmation/fallback.js";
+import {
+  applyTheme,
+  resolveTheme,
+  watchSystemTheme,
+  type ThemeOption,
+} from "./themes/apply.js";
+import { themes } from "./themes/presets.js";
 
 /**
  * Cursor configuration
  */
 export interface CursorConfig {
   /** Theme: 'light', 'dark', 'auto', or custom theme object */
-  theme?: ThemeOption
+  theme?: ThemeOption;
   /** Timeout before showing "Did you do it?" confirmation (ms) */
-  confirmationTimeout?: number
+  confirmationTimeout?: number;
   /** Whether to show pulsing highlight */
-  pulseHighlight?: boolean
+  pulseHighlight?: boolean;
   /** Padding around highlighted elements */
-  highlightPadding?: number
+  highlightPadding?: number;
 }
 
 /**
@@ -25,15 +30,15 @@ export interface CursorConfig {
  */
 export interface PointToOptions {
   /** Instruction to display in tooltip */
-  instruction: string
+  instruction: string;
   /** Current step index (0-based) */
-  stepIndex: number
+  stepIndex: number;
   /** Total number of steps */
-  totalSteps: number
+  totalSteps: number;
   /** Callback when user closes the guide */
-  onCancel?: () => void
+  onCancel?: () => void;
   /** Callback when user confirms step manually */
-  onConfirm?: () => void
+  onConfirm?: () => void;
 }
 
 /**
@@ -43,13 +48,14 @@ export interface PointToOptions {
  * into a cohesive visual guidance system.
  */
 export class Cursor {
-  private ghostCursor: GhostCursor
-  private tooltip: Tooltip
-  private highlight: Highlight
-  private confirmationFallback: ConfirmationFallback
-  private config: CursorConfig
-  private currentTarget: Element | null = null
-  private cleanupSystemTheme: (() => void) | null = null
+  private ghostCursor: GhostCursor;
+  private tooltip: Tooltip;
+  private highlight: Highlight;
+  private confirmationFallback: ConfirmationFallback;
+  private config: CursorConfig;
+  private currentTarget: Element | null = null;
+  private cleanupSystemTheme: (() => void) | null = null;
+  private cleanupEventListeners: (() => void) | null = null;
 
   constructor(config: CursorConfig = {}) {
     this.config = {
@@ -57,46 +63,57 @@ export class Cursor {
       pulseHighlight: true,
       highlightPadding: 4,
       ...config,
-    }
+    };
 
-    this.ghostCursor = new GhostCursor()
-    this.tooltip = new Tooltip()
-    this.highlight = new Highlight()
-    this.confirmationFallback = new ConfirmationFallback()
+    this.ghostCursor = new GhostCursor();
+    this.tooltip = new Tooltip();
+    this.highlight = new Highlight();
+    this.confirmationFallback = new ConfirmationFallback();
 
     // Apply theme
     if (this.config.theme) {
-      const theme = resolveTheme(this.config.theme)
-      applyTheme(theme)
+      const theme = resolveTheme(this.config.theme);
+      applyTheme(theme);
 
       // Watch for system theme changes if 'auto'
-      if (this.config.theme === 'auto') {
+      if (this.config.theme === "auto") {
         this.cleanupSystemTheme = watchSystemTheme((isDark) => {
-          applyTheme(isDark ? themes.dark : themes.light)
-        })
+          applyTheme(isDark ? themes.dark : themes.light);
+        });
       }
     }
 
     // Set up scroll/resize handlers
-    this.setupEventListeners()
+    this.setupEventListeners();
   }
 
   /**
    * Set up global event listeners
    */
   private setupEventListeners(): void {
-    if (typeof window === 'undefined') return
+    if (typeof window === "undefined") return;
 
-    // Reposition on scroll and resize
+    // Reposition all visuals (highlight, tooltip, and ghost cursor) on scroll and resize
     const handleReposition = () => {
       if (this.currentTarget) {
-        this.highlight.reposition(this.config.highlightPadding)
-        this.tooltip.reposition(this.currentTarget)
-      }
-    }
+        this.highlight.reposition(this.config.highlightPadding);
+        this.tooltip.reposition(this.currentTarget);
 
-    window.addEventListener('scroll', handleReposition, { passive: true })
-    window.addEventListener('resize', handleReposition, { passive: true })
+        // Also reposition ghost cursor to updated element center
+        const rect = this.currentTarget.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        this.ghostCursor.moveTo(centerX, centerY);
+      }
+    };
+
+    window.addEventListener("scroll", handleReposition, { passive: true });
+    window.addEventListener("resize", handleReposition, { passive: true });
+
+    this.cleanupEventListeners = () => {
+      window.removeEventListener("scroll", handleReposition);
+      window.removeEventListener("resize", handleReposition);
+    };
   }
 
   /**
@@ -105,57 +122,60 @@ export class Cursor {
    * @param element Target element
    * @param options Point-to options
    */
-  async pointTo(element: Element | null, options: PointToOptions): Promise<void> {
+  async pointTo(
+    element: Element | null,
+    options: PointToOptions,
+  ): Promise<void> {
     // Hide any existing visuals first
-    this.hide()
+    this.hide();
 
     if (!element) {
       // No element - show tooltip only at a default position
-      this.showTooltipOnly(options)
-      return
+      this.showTooltipOnly(options);
+      return;
     }
 
-    // Validate element is actually visible and has reasonable dimensions
-    const rect = element.getBoundingClientRect()
-    const style = getComputedStyle(element)
-    const isHidden = style.display === 'none' ||
-                     style.visibility === 'hidden' ||
-                     style.opacity === '0' ||
-                     rect.width === 0 ||
-                     rect.height === 0
+    // Check actionability (covers visibility, size, enabled, viewport, covered)
+    const actionability = isActionable(element);
 
-    if (isHidden) {
+    if (
+      actionability.reason === "hidden" ||
+      actionability.reason === "no_size"
+    ) {
       // Element exists but is not visible - show tooltip only
-      this.showTooltipOnly(options)
-      return
+      this.showTooltipOnly(options);
+      return;
     }
 
-    this.currentTarget = element
+    this.currentTarget = element;
 
-    // Check actionability and scroll into view if needed
-    const actionability = isActionable(element)
-    if (!actionability.ok) {
-      if (actionability.reason === 'out_of_viewport') {
-        scrollIntoViewIfNeeded(element)
-        // Wait for scroll to complete
-        await new Promise((resolve) => setTimeout(resolve, 300))
-      }
+    if (actionability.reason === "out_of_viewport") {
+      scrollIntoViewIfNeeded(element);
+      // Wait for scroll to complete
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
 
-    // Get element position after potential scroll (refresh rect)
-    const finalRect = element.getBoundingClientRect()
-    const centerX = finalRect.left + finalRect.width / 2
-    const centerY = finalRect.top + finalRect.height / 2
+    // Get element position (refresh after potential scroll)
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
 
-    // Animate cursor to element
-    this.ghostCursor.show()
-    await this.ghostCursor.animateTo(centerX, centerY)
+    // Animate cursor to element, then snap to final position
+    // (viewport may shift during the 500ms animation)
+    this.ghostCursor.show();
+    await this.ghostCursor.animateTo(centerX, centerY);
+
+    const postAnimRect = element.getBoundingClientRect();
+    this.ghostCursor.moveTo(
+      postAnimRect.left + postAnimRect.width / 2,
+      postAnimRect.top + postAnimRect.height / 2,
+    );
 
     // Show highlight
     this.highlight.show(element, {
       pulse: this.config.pulseHighlight,
       padding: this.config.highlightPadding,
-    })
+    });
 
     // Show tooltip
     this.tooltip.show(element, {
@@ -164,13 +184,16 @@ export class Cursor {
       totalSteps: options.totalSteps,
       onClose: options.onCancel,
       onConfirm: options.onConfirm,
-    })
+    });
 
     // Start confirmation timer
-    if (this.config.confirmationTimeout && this.config.confirmationTimeout > 0) {
+    if (
+      this.config.confirmationTimeout &&
+      this.config.confirmationTimeout > 0
+    ) {
       this.confirmationFallback.start(this.config.confirmationTimeout, () => {
-        this.tooltip.showConfirmation()
-      })
+        this.tooltip.showConfirmation();
+      });
     }
   }
 
@@ -179,9 +202,9 @@ export class Cursor {
    */
   private showTooltipOnly(options: PointToOptions): void {
     // Create a temporary position at screen center
-    if (typeof document === 'undefined') return
+    if (typeof document === "undefined") return;
 
-    const tempElement = document.createElement('div')
+    const tempElement = document.createElement("div");
     tempElement.style.cssText = `
       position: fixed;
       left: 50%;
@@ -189,8 +212,8 @@ export class Cursor {
       width: 1px;
       height: 1px;
       pointer-events: none;
-    `
-    document.body.appendChild(tempElement)
+    `;
+    document.body.appendChild(tempElement);
 
     this.tooltip.show(tempElement, {
       instruction: options.instruction,
@@ -198,35 +221,35 @@ export class Cursor {
       totalSteps: options.totalSteps,
       onClose: options.onCancel,
       onConfirm: options.onConfirm,
-    })
+    });
 
     // Clean up temp element
-    tempElement.remove()
+    tempElement.remove();
   }
 
   /**
    * Show the confirmation prompt manually
    */
   showConfirmation(): void {
-    this.tooltip.showConfirmation()
+    this.tooltip.showConfirmation();
   }
 
   /**
    * Hide the confirmation prompt
    */
   hideConfirmation(): void {
-    this.tooltip.hideConfirmation()
+    this.tooltip.hideConfirmation();
   }
 
   /**
    * Hide all visual elements
    */
   hide(): void {
-    this.ghostCursor.hide()
-    this.tooltip.hide()
-    this.highlight.hide()
-    this.confirmationFallback.stop()
-    this.currentTarget = null
+    this.ghostCursor.hide();
+    this.tooltip.hide();
+    this.highlight.hide();
+    this.confirmationFallback.stop();
+    this.currentTarget = null;
   }
 
   /**
@@ -235,21 +258,21 @@ export class Cursor {
    * @param instruction New instruction text
    */
   updateInstruction(instruction: string): void {
-    this.tooltip.update({ instruction })
+    this.tooltip.update({ instruction });
   }
 
   /**
    * Check if cursor is currently visible
    */
   isVisible(): boolean {
-    return this.ghostCursor.getState() !== 'hidden'
+    return this.ghostCursor.getState() !== "hidden";
   }
 
   /**
    * Get the current target element
    */
   getCurrentTarget(): Element | null {
-    return this.currentTarget
+    return this.currentTarget;
   }
 
   /**
@@ -258,20 +281,20 @@ export class Cursor {
    * @param theme Theme option
    */
   setTheme(theme: ThemeOption): void {
-    this.config.theme = theme
-    const resolved = resolveTheme(theme)
-    applyTheme(resolved)
+    this.config.theme = theme;
+    const resolved = resolveTheme(theme);
+    applyTheme(resolved);
 
     // Update system theme watcher
     if (this.cleanupSystemTheme) {
-      this.cleanupSystemTheme()
-      this.cleanupSystemTheme = null
+      this.cleanupSystemTheme();
+      this.cleanupSystemTheme = null;
     }
 
-    if (theme === 'auto') {
+    if (theme === "auto") {
       this.cleanupSystemTheme = watchSystemTheme((isDark) => {
-        applyTheme(isDark ? themes.dark : themes.light)
-      })
+        applyTheme(isDark ? themes.dark : themes.light);
+      });
     }
   }
 
@@ -279,15 +302,20 @@ export class Cursor {
    * Destroy the cursor and clean up resources
    */
   destroy(): void {
-    this.hide()
-    this.ghostCursor.destroy()
-    this.tooltip.destroy()
-    this.highlight.destroy()
-    this.confirmationFallback.destroy()
+    this.hide();
+    this.ghostCursor.destroy();
+    this.tooltip.destroy();
+    this.highlight.destroy();
+    this.confirmationFallback.destroy();
 
     if (this.cleanupSystemTheme) {
-      this.cleanupSystemTheme()
-      this.cleanupSystemTheme = null
+      this.cleanupSystemTheme();
+      this.cleanupSystemTheme = null;
+    }
+
+    if (this.cleanupEventListeners) {
+      this.cleanupEventListeners();
+      this.cleanupEventListeners = null;
     }
   }
 
@@ -298,6 +326,6 @@ export class Cursor {
    * @returns Cursor instance
    */
   static init(config: CursorConfig = {}): Cursor {
-    return new Cursor(config)
+    return new Cursor(config);
   }
 }

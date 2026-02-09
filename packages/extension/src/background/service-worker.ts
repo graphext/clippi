@@ -95,6 +95,15 @@ function handleContentMessage(
   message: ContentToBackgroundMessage,
   _sender: chrome.runtime.MessageSender,
 ): void {
+  // PREVIEW_ENDED can arrive when not recording - handle before the guard
+  if (message.type === "PREVIEW_ENDED") {
+    const previewEndedMsg: BackgroundToSidePanelMessage = {
+      type: "PREVIEW_ENDED",
+    };
+    chrome.runtime.sendMessage(previewEndedMsg).catch(() => {});
+    return;
+  }
+
   if (state.recordingState !== "recording" || !state.currentTargetId) {
     return;
   }
@@ -102,48 +111,44 @@ function handleContentMessage(
   const target = state.targets.find((t) => t.id === state.currentTargetId);
   if (!target) return;
 
+  let step: RecordedStep | null = null;
+
   if (message.type === "ELEMENT_CLICKED") {
-    const step: RecordedStep = {
+    step = {
       id: generateId(),
       selector: message.payload.selector,
       action: "click",
       instruction: `Click on "${message.payload.innerText.slice(0, 50) || message.payload.tagName}"`,
       timestamp: Date.now(),
+      successCondition: { click: true },
     };
-
-    target.steps.push(step);
-    target.updatedAt = Date.now();
-    saveState();
-    broadcastState();
-
-    // Notify side panel of new step
-    const stepMessage: BackgroundToSidePanelMessage = {
-      type: "STEP_RECORDED",
-      payload: { targetId: target.id, step },
-    };
-    chrome.runtime.sendMessage(stepMessage).catch(() => {});
   }
 
   if (message.type === "ELEMENT_INPUT") {
-    const step: RecordedStep = {
+    step = {
       id: generateId(),
       selector: message.payload.selector,
       action: "type",
       input: message.payload.value,
       instruction: `Type "${message.payload.value.slice(0, 30)}" in the ${message.payload.tagName.toLowerCase()} field`,
       timestamp: Date.now(),
+      successCondition: {
+        value: { selector: message.payload.selector, not_empty: true },
+      },
     };
+  }
 
+  if (step) {
     target.steps.push(step);
     target.updatedAt = Date.now();
     saveState();
     broadcastState();
-
-    const stepMessage: BackgroundToSidePanelMessage = {
-      type: "STEP_RECORDED",
-      payload: { targetId: target.id, step },
-    };
-    chrome.runtime.sendMessage(stepMessage).catch(() => {});
+    chrome.runtime
+      .sendMessage({
+        type: "STEP_RECORDED",
+        payload: { targetId: target.id, step },
+      } satisfies BackgroundToSidePanelMessage)
+      .catch(() => {});
   }
 
   if (message.type === "URL_CHANGED") {
@@ -151,6 +156,7 @@ function handleContentMessage(
     const lastStep = target.steps[target.steps.length - 1];
     if (lastStep) {
       lastStep.successCondition = {
+        ...lastStep.successCondition,
         urlContains: new URL(message.payload.url).pathname,
       };
       saveState();
@@ -330,6 +336,39 @@ async function handleSidePanelMessage(
       } catch {
         return { type: "ERROR", payload: { message: "Invalid JSON" } };
       }
+    }
+
+    case "PREVIEW_TARGET": {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (!tab?.id) {
+        return { type: "ERROR", payload: { message: "No active tab found" } };
+      }
+      const injected = await ensureContentScriptInjected(tab.id);
+      if (!injected) {
+        return {
+          type: "ERROR",
+          payload: { message: "Failed to inject content script" },
+        };
+      }
+      const target = state.targets.find(
+        (t) => t.id === message.payload.targetId,
+      );
+      if (!target) {
+        return { type: "ERROR", payload: { message: "Target not found" } };
+      }
+      await sendToContentScript({
+        type: "PREVIEW_TARGET",
+        payload: { target },
+      });
+      break;
+    }
+
+    case "STOP_PREVIEW": {
+      await sendToContentScript({ type: "STOP_PREVIEW" });
+      break;
     }
   }
 }

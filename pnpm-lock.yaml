@@ -97,6 +97,13 @@ importers:
         version: 2.1.9(@types/node@22.19.7)(jsdom@27.4.0)
 
   packages/extension:
+    dependencies:
+      '@clippi/core':
+        specifier: workspace:*
+        version: link:../core
+      '@clippi/cursor':
+        specifier: workspace:*
+        version: link:../cursor
     devDependencies:
       '@types/chrome':
         specifier: ^0.0.287

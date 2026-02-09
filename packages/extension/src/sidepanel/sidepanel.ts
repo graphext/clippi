@@ -20,6 +20,7 @@ let state: RecorderState = {
 
 let selectedTargetId: string | null = null;
 let editingStepId: string | null = null;
+let previewingTargetId: string | null = null;
 
 // DOM Elements
 const elements = {
@@ -184,6 +185,8 @@ function updateTargetsList(): void {
         target.id === state.currentTargetId &&
         state.recordingState === "recording";
       const isOtherDomain = !isCurrentDomain;
+      const isPreviewing = target.id === previewingTargetId;
+      const canPreview = target.steps.length > 0 && isCurrentDomain;
 
       html += `
         <li class="target-item ${isActive ? "active" : ""} ${isRecording ? "recording" : ""} ${isOtherDomain ? "other-domain" : ""}"
@@ -193,6 +196,12 @@ function updateTargetsList(): void {
             <div class="target-label">${escapeHtml(target.label)}</div>
             <div class="target-meta">${target.category} · ${target.steps.length} steps</div>
           </div>
+          <button class="btn-preview ${isPreviewing ? "previewing" : ""}"
+                  data-target-id="${target.id}"
+                  title="${isPreviewing ? "Stop preview" : "Preview target"}"
+                  ${!canPreview ? "disabled" : ""}>
+            ${isPreviewing ? "■" : "▶"}
+          </button>
           <div class="target-menu">
             <button class="target-menu-btn" data-target-id="${target.id}" title="More options">⋮</button>
             <div class="target-menu-dropdown">
@@ -211,10 +220,26 @@ function updateTargetsList(): void {
     item.addEventListener("click", (e) => {
       const target = e.target as Element;
       if (target.classList.contains("target-checkbox")) return;
-      if (target.closest(".target-menu")) return; // Don't select when clicking menu
+      if (target.closest(".target-menu")) return;
+      if (target.closest(".btn-preview")) return;
       selectTarget(item.getAttribute("data-id")!);
     });
   });
+
+  // Preview button handlers
+  elements.targetsList
+    .querySelectorAll<HTMLButtonElement>(".btn-preview")
+    .forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const targetId = btn.dataset.targetId!;
+        if (previewingTargetId === targetId) {
+          stopPreview();
+        } else {
+          startPreview(targetId);
+        }
+      });
+    });
 
   // Menu button handlers
   elements.targetsList.querySelectorAll(".target-menu-btn").forEach((btn) => {
@@ -513,8 +538,37 @@ async function deleteTarget(): Promise<void> {
 }
 
 /**
- * Export manifest
+ * Start preview for a target
  */
+async function startPreview(targetId: string): Promise<void> {
+  if (previewingTargetId) {
+    await sendMessage({ type: "STOP_PREVIEW" });
+  }
+
+  previewingTargetId = targetId;
+  updateTargetsList();
+
+  const response = await sendMessage({
+    type: "PREVIEW_TARGET",
+    payload: { targetId },
+  });
+
+  if (response?.type === "ERROR") {
+    previewingTargetId = null;
+    updateTargetsList();
+    alert(response.payload.message);
+  }
+}
+
+/**
+ * Stop preview
+ */
+async function stopPreview(): Promise<void> {
+  await sendMessage({ type: "STOP_PREVIEW" });
+  previewingTargetId = null;
+  updateTargetsList();
+}
+
 async function exportManifest(): Promise<void> {
   const response = await sendMessage({ type: "EXPORT_MANIFEST" });
   if (response?.type === "EXPORT_READY") {
@@ -675,6 +729,10 @@ function handleMessage(message: BackgroundToSidePanelMessage): void {
       break;
     case "STEP_RECORDED":
       // State will be updated via STATE_UPDATED, but we could add animation here
+      break;
+    case "PREVIEW_ENDED":
+      previewingTargetId = null;
+      updateTargetsList();
       break;
     case "ERROR":
       alert(message.payload.message);

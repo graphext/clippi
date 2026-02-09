@@ -7,9 +7,13 @@ import {
   extractSelectors,
   describeElement,
 } from "../recorder/selector-extractor.js";
+import { StepSequencer, resolveSelector } from "@clippi/core";
+import { Cursor } from "@clippi/cursor";
+import { convertTarget } from "../recorder/manifest-builder.js";
 import type {
   ContentToBackgroundMessage,
   BackgroundToContentMessage,
+  RecordedTarget,
   Selector,
 } from "../types/messages.js";
 
@@ -21,6 +25,10 @@ let contextInvalidated = false;
 
 // Track last URL for change detection
 let lastUrl = window.location.href;
+
+// Preview state
+let previewCursor: Cursor | null = null;
+let previewSequencer: StepSequencer | null = null;
 
 /**
  * Check if extension context is still valid
@@ -55,19 +63,38 @@ function cleanup(): void {
   isRecording = false;
   document.body.style.cursor = "";
   clearHighlight();
+  stopPreview();
 }
 
+// Track recent clicks to deduplicate between pointerdown and click
+let lastRecordedClick = { target: null as Element | null, time: 0 };
+
 /**
- * Handle click events during recording
+ * Record a click on an interactive element.
+ * Shared by both handleClick and handlePointerDown.
  */
-function handleClick(event: MouseEvent): void {
+function recordClick(rawTarget: Element): void {
   if (!isRecording || contextInvalidated) return;
 
-  const target = event.target as Element;
-  if (!target || !isInteractiveElement(target)) return;
-
   // Don't capture clicks on extension UI
-  if (isExtensionElement(target)) return;
+  if (isExtensionElement(rawTarget)) return;
+
+  // Find the interactive element: use the click target itself, or walk up
+  // the DOM to find the nearest interactive ancestor (handles clicks on
+  // text/icons inside custom components like select triggers)
+  const target = findInteractiveElement(rawTarget);
+  if (!target) return;
+
+  // Deduplicate: skip if we recorded the same element very recently
+  // (handles pointerdown + click firing on the same interaction)
+  const now = Date.now();
+  if (
+    lastRecordedClick.target === target &&
+    now - lastRecordedClick.time < 500
+  ) {
+    return;
+  }
+  lastRecordedClick = { target, time: now };
 
   const selector = extractSelectors(target);
   const rect = target.getBoundingClientRect();
@@ -89,6 +116,26 @@ function handleClick(event: MouseEvent): void {
 
   // Visual feedback
   flashElement(target);
+}
+
+/**
+ * Handle click events during recording
+ */
+function handleClick(event: MouseEvent): void {
+  const rawTarget = event.target as Element;
+  if (rawTarget) recordClick(rawTarget);
+}
+
+/**
+ * Handle pointerdown events during recording
+ * Catches interactions that some frameworks (e.g. Radix) intercept
+ * before a click event fires (via preventDefault on pointerdown)
+ */
+function handlePointerDown(event: PointerEvent): void {
+  // Only handle primary button (left click)
+  if (event.button !== 0) return;
+  const rawTarget = event.target as Element;
+  if (rawTarget) recordClick(rawTarget);
 }
 
 /**
@@ -173,6 +220,10 @@ function isInteractiveElement(element: Element): boolean {
     "tab",
     "menuitem",
     "option",
+    "combobox",
+    "listbox",
+    "switch",
+    "treeitem",
   ];
   if (role && interactiveRoles.includes(role)) return true;
 
@@ -184,6 +235,22 @@ function isInteractiveElement(element: Element): boolean {
   if (element.hasAttribute("tabindex")) return true;
 
   return false;
+}
+
+/**
+ * Walk up the DOM from the clicked element to find the nearest interactive element.
+ * Returns the element itself if it's interactive, or the first interactive ancestor,
+ * stopping at <body>. Returns null if no interactive element is found.
+ */
+function findInteractiveElement(element: Element): Element | null {
+  let current: Element | null = element;
+
+  while (current && current !== document.body) {
+    if (isInteractiveElement(current)) return current;
+    current = current.parentElement;
+  }
+
+  return null;
 }
 
 /**
@@ -228,46 +295,9 @@ function flashElement(element: Element): void {
 function highlightElement(selector: Selector): void {
   clearHighlight();
 
-  // Try each strategy until one works
-  for (const strategy of selector.strategies) {
-    let cssSelector: string;
-
-    switch (strategy.type) {
-      case "testId":
-        cssSelector = `[data-testid="${strategy.value}"]`;
-        break;
-      case "aria":
-        cssSelector = `[aria-label="${strategy.value}"]`;
-        break;
-      case "css":
-        cssSelector = strategy.value;
-        break;
-      case "text":
-        // Text selectors require manual search
-        const elements = document.querySelectorAll(strategy.tag || "*");
-        for (const el of elements) {
-          if (el.textContent?.includes(strategy.value)) {
-            highlightedElement = el;
-            break;
-          }
-        }
-        continue;
-      default:
-        continue;
-    }
-
-    try {
-      const element = document.querySelector(cssSelector);
-      if (element) {
-        highlightedElement = element;
-        break;
-      }
-    } catch {
-      // Invalid selector
-    }
-  }
-
-  if (highlightedElement) {
+  const result = resolveSelector(selector);
+  if (result.element) {
+    highlightedElement = result.element;
     showHighlightOverlay(highlightedElement);
   }
 }
@@ -307,6 +337,75 @@ function clearHighlight(): void {
   }
 }
 
+// ============================================================
+// Preview Player - Uses @clippi/cursor to play target steps
+// ============================================================
+
+/**
+ * Preview a target's steps using StepSequencer + Cursor
+ * (same flow as production - waits for real success conditions)
+ */
+async function previewTarget(target: RecordedTarget): Promise<void> {
+  stopPreview();
+
+  if (target.steps.length === 0) return;
+
+  // Wait for viewport to stabilize after sidepanel interaction
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  // Convert to ManifestTarget (same format production uses)
+  const manifestTarget = convertTarget(target);
+
+  previewCursor = Cursor.init({ theme: "auto" });
+  previewSequencer = new StepSequencer({ confirmationTimeout: 10000 });
+
+  // Wire cursor to sequencer events
+  previewSequencer.on("beforeGuide", (step) => {
+    previewCursor?.pointTo(step.domElement, {
+      instruction: step.instruction,
+      stepIndex: step.stepIndex,
+      totalSteps: step.totalSteps,
+      onCancel: () => stopPreview(),
+      onConfirm: () => previewSequencer?.confirmStep(),
+    });
+  });
+
+  previewSequencer.on("flowCompleted", () => {
+    stopPreview();
+    notifyPreviewEnded();
+  });
+
+  previewSequencer.on("flowAbandoned", () => {
+    stopPreview();
+    notifyPreviewEnded();
+  });
+
+  // Start the flow
+  previewSequencer.start(manifestTarget);
+}
+
+/**
+ * Notify background that preview has ended (so sidepanel can reset UI)
+ */
+function notifyPreviewEnded(): void {
+  if (!isContextValid()) return;
+  chrome.runtime.sendMessage({ type: "PREVIEW_ENDED" }).catch(() => {});
+}
+
+/**
+ * Stop any running preview
+ */
+function stopPreview(): void {
+  if (previewSequencer) {
+    previewSequencer.destroy();
+    previewSequencer = null;
+  }
+  if (previewCursor) {
+    previewCursor.destroy();
+    previewCursor = null;
+  }
+}
+
 /**
  * Handle messages from service worker
  * Returns true if the message requires an async response
@@ -343,6 +442,21 @@ function handleMessage(
     case "CLEAR_HIGHLIGHT":
       clearHighlight();
       break;
+
+    case "PREVIEW_TARGET":
+      previewTarget(
+        (
+          message as {
+            type: "PREVIEW_TARGET";
+            payload: { target: RecordedTarget };
+          }
+        ).payload.target,
+      );
+      break;
+
+    case "STOP_PREVIEW":
+      stopPreview();
+      break;
   }
   return false;
 }
@@ -351,6 +465,9 @@ function handleMessage(
 function init(): void {
   // Event listeners
   document.addEventListener("click", handleClick, { capture: true });
+  document.addEventListener("pointerdown", handlePointerDown, {
+    capture: true,
+  });
   document.addEventListener("input", handleInput, { capture: true });
   document.addEventListener("change", handleInput, { capture: true });
 

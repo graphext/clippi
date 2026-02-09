@@ -26,11 +26,18 @@ export interface RecordedStep {
   input?: string; // For 'type' and 'select' actions
   instruction: string;
   timestamp: number;
-  // Success condition (optional, user can edit)
+  // Success condition (auto-generated during recording, user can edit)
   successCondition?: {
     urlContains?: string;
-    visible?: string;
+    visible?: string | Selector;
     exists?: string;
+    click?: boolean;
+    value?: {
+      selector: string | Selector;
+      equals?: string;
+      contains?: string;
+      not_empty?: boolean;
+    };
   };
 }
 
@@ -61,7 +68,8 @@ export interface RecorderState {
 export type ContentToBackgroundMessage =
   | { type: "ELEMENT_CLICKED"; payload: ElementClickedPayload }
   | { type: "ELEMENT_INPUT"; payload: ElementInputPayload }
-  | { type: "URL_CHANGED"; payload: { url: string } };
+  | { type: "URL_CHANGED"; payload: { url: string } }
+  | { type: "PREVIEW_ENDED" };
 
 export interface ElementClickedPayload {
   selector: Selector;
@@ -83,7 +91,9 @@ export type BackgroundToContentMessage =
   | { type: "STOP_RECORDING" }
   | { type: "PAUSE_RECORDING" }
   | { type: "HIGHLIGHT_ELEMENT"; payload: { selector: Selector } }
-  | { type: "CLEAR_HIGHLIGHT" };
+  | { type: "CLEAR_HIGHLIGHT" }
+  | { type: "PREVIEW_TARGET"; payload: { target: RecordedTarget } }
+  | { type: "STOP_PREVIEW" };
 
 // Messages from side panel to service worker
 export type SidePanelToBackgroundMessage =
@@ -108,14 +118,17 @@ export type SidePanelToBackgroundMessage =
     }
   | { type: "DELETE_STEP"; payload: { targetId: string; stepId: string } }
   | { type: "EXPORT_MANIFEST" }
-  | { type: "IMPORT_MANIFEST"; payload: { json: string } };
+  | { type: "IMPORT_MANIFEST"; payload: { json: string } }
+  | { type: "PREVIEW_TARGET"; payload: { targetId: string } }
+  | { type: "STOP_PREVIEW" };
 
 // Messages from service worker to side panel
 export type BackgroundToSidePanelMessage =
   | { type: "STATE_UPDATED"; payload: RecorderState }
   | { type: "STEP_RECORDED"; payload: { targetId: string; step: RecordedStep } }
   | { type: "EXPORT_READY"; payload: { json: string } }
-  | { type: "ERROR"; payload: { message: string } };
+  | { type: "ERROR"; payload: { message: string } }
+  | { type: "PREVIEW_ENDED" };
 
 // Union type for all messages
 export type ExtensionMessage =

@@ -4,67 +4,76 @@
  */
 
 export interface ManifestMeta {
-  app_name?: string
-  version?: string
-  generated_at: string
-  generator: string
+  app_name?: string;
+  version?: string;
+  generated_at: string;
+  generator: string;
 }
 
 export interface ManifestDefaults {
-  timeout_ms?: number
+  timeout_ms?: number;
 }
 
 export interface SelectorStrategy {
-  type: 'testId' | 'aria' | 'css' | 'text'
-  value: string
-  tag?: string
+  type: "testId" | "aria" | "css" | "text";
+  value: string;
+  tag?: string;
 }
 
 export interface Selector {
-  strategies: SelectorStrategy[]
+  strategies: SelectorStrategy[];
+}
+
+export interface ValueCondition {
+  selector: string | Selector;
+  equals?: string;
+  contains?: string;
+  not_empty?: boolean;
 }
 
 export interface SuccessCondition {
-  url_contains?: string
-  url_matches?: string
-  visible?: string | Selector
-  exists?: string | Selector
+  url_contains?: string;
+  url_matches?: string;
+  visible?: string | Selector;
+  exists?: string | Selector;
   attribute?: {
-    selector: string | Selector
-    name: string
-    value?: string
-  }
+    selector: string | Selector;
+    name: string;
+    value?: string;
+  };
+  value?: ValueCondition;
+  click?: boolean | string | Selector;
 }
 
 export interface PathStep {
-  selector: Selector
-  instruction: string
-  action?: 'click' | 'type' | 'select' | 'clear'
-  input?: string
-  success_condition?: SuccessCondition
-  final?: boolean
+  selector: Selector;
+  instruction: string;
+  action?: "click" | "type" | "select" | "clear";
+  input?: string;
+  success_condition?: SuccessCondition;
+  final?: boolean;
 }
 
 export interface OnBlocked {
-  message: string
-  suggest?: string
+  message: string;
+  suggest?: string;
 }
 
 export interface ManifestTarget {
-  id: string
-  selector: Selector
-  label: string
-  description: string
-  keywords: string[]
-  category: string
-  path?: PathStep[]
-  conditions?: string
-  on_blocked?: OnBlocked
+  id: string;
+  selector: Selector;
+  label: string;
+  description: string;
+  keywords: string[];
+  category: string;
+  path?: PathStep[];
+  conditions?: string;
+  on_blocked?: OnBlocked;
 }
 
 export interface Manifest {
-  $schema?: string
-  meta?: ManifestMeta
-  defaults?: ManifestDefaults
-  targets: ManifestTarget[]
+  $schema?: string;
+  meta?: ManifestMeta;
+  defaults?: ManifestDefaults;
+  targets: ManifestTarget[];
 }
