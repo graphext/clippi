@@ -152,11 +152,14 @@ function handleInput(event: Event): void {
 
   // Debounce input events
   clearTimeout(
-    (target as Element & { _clippiInputTimeout?: NodeJS.Timeout })
-      ._clippiInputTimeout,
+    (
+      target as Element & {
+        _clippiInputTimeout?: ReturnType<typeof setTimeout>;
+      }
+    )._clippiInputTimeout,
   );
   (
-    target as Element & { _clippiInputTimeout?: NodeJS.Timeout }
+    target as Element & { _clippiInputTimeout?: ReturnType<typeof setTimeout> }
   )._clippiInputTimeout = setTimeout(() => {
     const selector = extractSelectors(target);
 

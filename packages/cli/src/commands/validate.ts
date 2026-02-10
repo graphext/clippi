@@ -461,7 +461,7 @@ async function checkSuccessCondition(
 async function executePath(
   page: Page,
   target: ManifestTarget,
-  url: string,
+  _url: string,
 ): Promise<E2EPathResult> {
   const result: E2EPathResult = {
     targetId: target.id,

@@ -207,16 +207,15 @@ function buildNthChildPath(element: Element): string {
     current !== document.body &&
     current !== document.documentElement
   ) {
-    const parent = current.parentElement;
+    const parent: Element | null = current.parentElement;
     if (!parent) break;
 
     const siblings = Array.from(parent.children);
-    const index = siblings.indexOf(current) + 1;
     const tagName = current.tagName.toLowerCase();
 
     // Count same-tag siblings for nth-of-type
     const sameTagSiblings = siblings.filter(
-      (s) => s.tagName === current!.tagName,
+      (s: Element) => s.tagName === current!.tagName,
     );
     if (sameTagSiblings.length === 1) {
       path.unshift(tagName);

@@ -421,7 +421,8 @@ function editStep(stepId: string): void {
   elements.stepAction.value = step.action;
   elements.stepInput.value = step.input || "";
   elements.stepUrlContains.value = step.successCondition?.urlContains || "";
-  elements.stepVisible.value = step.successCondition?.visible || "";
+  const visible = step.successCondition?.visible;
+  elements.stepVisible.value = typeof visible === "string" ? visible : "";
 
   // Show/hide input field based on action
   elements.stepInputGroup.style.display =
@@ -477,8 +478,6 @@ async function deleteStep(stepId: string): Promise<void> {
  * Save target changes with debounce
  */
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-let lastSavedTargetId: string | null = null;
-
 async function saveTarget(): Promise<void> {
   if (!selectedTargetId) return;
 
@@ -519,21 +518,6 @@ function showSavedIndicator(): void {
     setTimeout(() => {
       indicator.classList.remove("visible");
     }, 1500);
-  }
-}
-
-/**
- * Delete selected target
- */
-async function deleteTarget(): Promise<void> {
-  if (!selectedTargetId) return;
-
-  if (confirm("Delete this target and all its steps?")) {
-    await sendMessage({
-      type: "DELETE_TARGET",
-      payload: { id: selectedTargetId },
-    });
-    selectedTargetId = null;
   }
 }
 

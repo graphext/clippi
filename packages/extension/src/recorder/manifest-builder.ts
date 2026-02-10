@@ -7,7 +7,6 @@ import type {
   Manifest,
   ManifestTarget,
   PathStep,
-  Selector,
   SuccessCondition,
 } from "../types/manifest.js";
 
@@ -165,6 +164,7 @@ export function mergeIntoManifest(
     meta: {
       ...existing.meta,
       generated_at: new Date().toISOString(),
+      generator: existing.meta?.generator ?? "clippi-extension/0.1.0",
     },
     targets: [...updatedExisting, ...toAdd],
   };
