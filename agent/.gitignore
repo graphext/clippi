@@ -40,3 +40,4 @@ htmlcov/
 
 # Generated files
 *.manifest.json
+*.manifest.json.part

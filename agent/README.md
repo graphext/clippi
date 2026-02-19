@@ -18,9 +18,19 @@ The Clippi Agent automates the creation of `guide.manifest.json` files by:
 
 ## Installation
 
+Using `uv` (recommended):
+
 ```bash
 cd agent
-pip install -r requirements.txt
+uv sync
+uv run playwright install chromium
+```
+
+Using `pip`:
+
+```bash
+cd agent
+pip install .
 playwright install chromium
 ```
 
@@ -72,17 +82,17 @@ Or use JSON for more control:
 
 ## Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--url, -u` | URL of the application | Required |
-| `--tasks, -t` | Path to tasks file | Required |
-| `--output, -o` | Output manifest path | `guide.manifest.json` |
-| `--provider, -p` | LLM provider | `gemini` |
-| `--model, -m` | Model name | `gemini-3-flash-preview` |
-| `--no-headless` | Show browser UI | `false` |
-| `--docs, -d` | Path to docs for context | - |
-| `--timeout` | Operation timeout (ms) | `30000` |
-| `--config, -c` | JSON config file | - |
+| Option           | Description              | Default                  |
+| ---------------- | ------------------------ | ------------------------ |
+| `--url, -u`      | URL of the application   | Required                 |
+| `--tasks, -t`    | Path to tasks file       | Required                 |
+| `--output, -o`   | Output manifest path     | `guide.manifest.json`    |
+| `--provider, -p` | LLM provider             | `gemini`                 |
+| `--model, -m`    | Model name               | `gemini-3-flash-preview` |
+| `--no-headless`  | Show browser UI          | `false`                  |
+| `--docs, -d`     | Path to docs for context | -                        |
+| `--timeout`      | Operation timeout (ms)   | `30000`                  |
+| `--config, -c`   | JSON config file         | -                        |
 
 ## Configuration File
 
@@ -107,6 +117,13 @@ clippi-agent --config agent.config.json
 ```
 
 ## LLM Providers
+
+API keys can be set via environment variables or in a `.env` file. The agent loads `.env` from the current working directory:
+
+```bash
+# agent/.env (when running with uv from agent/)
+GEMINI_API_KEY=your-key
+```
 
 ### Gemini (default, recommended)
 
@@ -166,12 +183,16 @@ Example output:
       "category": "data",
       "path": [
         {
-          "selector": { "strategies": [{ "type": "testId", "value": "data-tab" }] },
+          "selector": {
+            "strategies": [{ "type": "testId", "value": "data-tab" }]
+          },
           "instruction": "Click on \"Data\"",
           "success_condition": { "url_contains": "/data" }
         },
         {
-          "selector": { "strategies": [{ "type": "testId", "value": "export-btn" }] },
+          "selector": {
+            "strategies": [{ "type": "testId", "value": "export-btn" }]
+          },
           "instruction": "Click on \"Export\"",
           "final": true
         }
@@ -189,6 +210,28 @@ Example output:
 4. **Review and refine** the generated manifest manually
 5. **Run `clippi validate`** after generation to check selectors
 
+## Example
+
+See [`/examples/agent-demo`](../examples/agent-demo) for a complete working example that demonstrates:
+
+- How to use the agent with the Clippi demo-app
+- Example task files in both text and JSON formats
+- Pre-configured `agent.config.json`
+- Step-by-step guide to generate your first manifest
+
+To try it:
+
+```bash
+# Start the demo-app
+cd examples/demo-app
+npm start
+
+# Run the agent (in another terminal)
+cd agent
+export GEMINI_API_KEY=your-key
+uv run clippi-agent --config ../examples/agent-demo/agent.config.json
+```
+
 ## Troubleshooting
 
 ### "GEMINI_API_KEY not set"
@@ -199,9 +242,19 @@ export GEMINI_API_KEY=your-key-here
 
 ### "browser-use not installed"
 
+Using `uv`:
+
 ```bash
 cd agent
-pip install -r requirements.txt
+uv sync
+uv run playwright install chromium
+```
+
+Using `pip`:
+
+```bash
+cd agent
+pip install .
 playwright install chromium
 ```
 
@@ -215,6 +268,7 @@ playwright install chromium
 ### Selectors not found
 
 The agent generates best-effort selectors. After generation:
+
 1. Run `clippi validate --url https://myapp.com` to check
 2. Manually refine selectors that don't work
 3. Add `data-testid` attributes to your app for stability

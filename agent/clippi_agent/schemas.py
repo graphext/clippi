@@ -9,6 +9,8 @@ These models define the structure for:
 
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -25,18 +27,6 @@ class AgentTask(BaseModel):
     description: str = Field(
         ...,
         description="Natural language description of the task, e.g. 'export data to CSV'",
-    )
-    id: str | None = Field(
-        default=None,
-        description="Optional ID for the task. If not provided, will be generated from description.",
-    )
-    category: str | None = Field(
-        default=None,
-        description="Optional category for grouping, e.g. 'data', 'settings', 'account'",
-    )
-    keywords: list[str] = Field(
-        default_factory=list,
-        description="Additional keywords for matching user queries",
     )
 
 
@@ -85,6 +75,12 @@ class AgentConfig(BaseModel):
     output_path: str = Field(
         default="guide.manifest.json",
         description="Path to write the generated manifest",
+    )
+
+    # Debug Configuration
+    verbose: bool = Field(
+        default=False,
+        description="Enable verbose debug logging during extraction",
     )
 
     # Context (optional)
@@ -288,3 +284,35 @@ class RecordedFlow(BaseModel):
     success: bool = False
     error: str | None = None
     duration_ms: float = 0
+
+
+# =============================================================================
+# Timing Schemas (for performance tracking)
+# =============================================================================
+
+
+@dataclass
+class TaskTiming:
+    """Timing breakdown for a single task execution."""
+
+    task_description: str
+    start_time: float = field(default_factory=time.time)
+    browser_startup_ms: float = 0
+    agent_execution_ms: float = 0
+    extraction_ms: float = 0
+    total_ms: float = 0
+
+    def format_row(self) -> tuple[str, str, str, str, str]:
+        """Return formatted row for table display."""
+        task = (
+            self.task_description[:35] + "..."
+            if len(self.task_description) > 38
+            else self.task_description
+        )
+        return (
+            task,
+            f"{self.total_ms/1000:.1f}s",
+            f"{self.browser_startup_ms/1000:.1f}s",
+            f"{self.agent_execution_ms/1000:.1f}s",
+            f"{self.extraction_ms/1000:.1f}s",
+        )

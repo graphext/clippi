@@ -46,18 +46,37 @@ def parse_tasks_file(path: str) -> list[AgentTask]:
 
 def parse_config_file(path: str) -> AgentConfig:
     """Parse a JSON config file."""
-    content = Path(path).read_text()
+    config_path = Path(path)
+    config_dir = config_path.parent
+    content = config_path.read_text()
     data = json.loads(content)
 
-    # Convert tasks if they're strings
+    # Handle tasks: either inline array or file path
     if "tasks" in data:
-        tasks = []
-        for item in data["tasks"]:
-            if isinstance(item, str):
-                tasks.append(AgentTask(description=item))
-            elif isinstance(item, dict):
-                tasks.append(AgentTask(**item))
+        tasks_value = data["tasks"]
+
+        # If tasks is a string, treat it as a file path relative to config
+        if isinstance(tasks_value, str):
+            tasks_file = config_dir / tasks_value
+            tasks = parse_tasks_file(str(tasks_file))
+        # If tasks is an array, parse each item
+        elif isinstance(tasks_value, list):
+            tasks = []
+            for item in tasks_value:
+                if isinstance(item, str):
+                    tasks.append(AgentTask(description=item))
+                elif isinstance(item, dict):
+                    tasks.append(AgentTask(**item))
+        else:
+            raise ValueError(f"tasks must be a string (file path) or array, got {type(tasks_value)}")
+
         data["tasks"] = tasks
+
+    # Resolve output_path relative to config file if it's a relative path
+    if "output_path" in data:
+        output_path = Path(data["output_path"])
+        if not output_path.is_absolute():
+            data["output_path"] = str(config_dir / output_path)
 
     return AgentConfig(**data)
 
@@ -87,11 +106,11 @@ Tasks file format (tasks.txt):
   create a new dataset
   change my plan to Pro
 
-Tasks file format (tasks.json):
-  [
-    {"description": "export data to CSV", "category": "data"},
-    {"description": "create dataset", "keywords": ["new", "import"]}
-  ]
+Inline tasks in config (agent.config.json):
+  {
+    "url": "https://myapp.com",
+    "tasks": ["export data to CSV", "create dataset"]
+  }
 
 Environment variables:
   GEMINI_API_KEY     Google Gemini API key (required for default provider)
@@ -180,11 +199,23 @@ Environment variables:
     # Build config
     if args.config:
         config = parse_config_file(args.config)
-        # Allow CLI overrides
+        # CLI flags override config file values
         if args.url:
             config.url = args.url
-        if args.output:
+        if args.no_headless:
+            config.headless = False
+        if args.output != "guide.manifest.json":
             config.output_path = args.output
+        if args.provider != "gemini":
+            config.provider = args.provider
+        if args.model != "gemini-3-flash-preview":
+            config.model = args.model
+        if args.timeout != 30000:
+            config.timeout_ms = args.timeout
+        if args.docs:
+            config.docs_context = Path(args.docs).read_text()
+        # Always override verbose flag from CLI
+        config.verbose = args.verbose
     else:
         # Require url and tasks
         if not args.url:
@@ -208,6 +239,7 @@ Environment variables:
             timeout_ms=args.timeout,
             output_path=args.output,
             docs_context=docs_context,
+            verbose=args.verbose,
         )
 
     # Check for API key
@@ -245,7 +277,23 @@ Environment variables:
         print(f"\n❌ Error: {e}")
         if args.verbose:
             import traceback
+            print("\n" + "=" * 60)
+            print("Full traceback:")
+            print("=" * 60)
             traceback.print_exc()
+            print("\n" + "=" * 60)
+            print("Diagnostics:")
+            print("=" * 60)
+            print(f"  Python: {sys.version}")
+            print(f"  Working directory: {os.getcwd()}")
+            try:
+                import browser_use
+                print(f"  Browser Use version: {browser_use.__version__}")
+            except Exception:
+                print(f"  Browser Use: (could not determine version)")
+            print("=" * 60)
+        else:
+            print("\nRun with --verbose for full diagnostics")
         sys.exit(1)
 
 
