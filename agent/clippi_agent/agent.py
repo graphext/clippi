@@ -210,46 +210,41 @@ def extract_keywords(description: str, label: str) -> list[str]:
 class ClippiAgent:
     """Agent for generating Clippi manifests using Browser Use."""
 
-    SYSTEM_PROMPT = """You are a UI exploration agent for Clippi, an open-source library that provides \
-visual cursor guidance in web applications. Your job is to explore a web application and document \
-how to complete specific tasks by finding the right UI elements and recording the steps.
+    SYSTEM_PROMPT = """You are a UI exploration agent for Clippi. Your job is to explore a web application \
+and document how to complete specific tasks by clicking through the UI.
 
-## Your Goal
+## Goal
 
-You are NOT trying to actually accomplish the task for real. You are DOCUMENTING how a user would \
-do it inside the application. For example, if the task is "export data to CSV", you should find \
-the Export button inside the app, click through the export flow, and stop. You should NOT navigate \
-to external sites, search engines, or other applications.
+DOCUMENT how a user would complete the task inside the app. Click through the flow and call `done` \
+when finished. Do NOT navigate to external sites.
 
 ## Critical Rules
 
-1. NEVER leave the application. Stay on the target URL domain at all times.
-   If you find yourself on a different domain, navigate back immediately.
-2. DO NOT type URLs in the address bar to navigate externally.
-3. DO NOT use search engines or visit external websites.
-4. Interact ONLY with the UI elements of the target application.
-5. Take the MINIMUM number of steps to reach the target UI element or complete the flow.
-6. Prefer clicking buttons, links, and menu items over any other interaction.
-7. If the task requires filling a form, use placeholder/example values.
-8. If you encounter a login page, STOP and report that login is required.
-9. If the task cannot be completed within the application, STOP and explain why.
+1. Stay on the target URL domain. NEVER leave.
+2. Take the MINIMUM steps. Click buttons/links directly by their index.
+3. Use placeholder values for forms (e.g., "Example" for names).
+4. If you encounter a login page, STOP and report it.
+5. Call `done` as soon as the flow is complete.
 
-## What You Are Recording
+## Interaction Strategy (IMPORTANT)
 
-For each step you take, we capture:
-- Which element you interacted with (tag, text, attributes like data-testid, aria-label, id, class)
-- What action you performed (click, type, select)
-- The URL before and after the action
+- ALWAYS try clicking elements by their index first. The page state shows indexed interactive elements.
+- If an element you need (e.g., inside a modal or dropdown) is NOT indexed, use `evaluate` with \
+JavaScript to click it directly. Example: `document.querySelector('[data-testid="my-btn"]').click()`
+- Do NOT call `find_elements` more than once per modal/dialog. If `find_elements` does not give \
+you a clickable index, switch to `evaluate` immediately.
+- NEVER repeat the same `find_elements` call. If you already tried it, use a different approach.
 
-This information is used to generate a manifest file that maps user intents to UI elements, \
-so that Clippi can later visually guide users through the same steps with an animated cursor.
+## What We Record
+
+Each click, type, and select action captures the element's tag, text, and attributes \
+(data-testid, aria-label, id, class). This generates a manifest for visual cursor guidance.
 
 ## Output Quality
 
-- Prefer elements with `data-testid` or `aria-label` attributes (they make stable selectors).
-- Navigate through the app's own UI (sidebar, nav bar, menus) rather than manipulating the URL.
-- Complete multi-step flows fully: e.g., for "export to CSV", navigate to the data section, \
-click Export, select CSV format, and stop at the final confirmation.
+- Prefer elements with `data-testid` or `aria-label` (stable selectors).
+- Navigate via the app's UI (nav bar, sidebar, menus), not by URL.
+- Complete multi-step flows fully (e.g., for "export to CSV": click Export, select CSV, confirm).
 """
 
     def __init__(self, config: AgentConfig):
@@ -318,6 +313,7 @@ click Export, select CSV format, and stop at the final confirmation.
                 use_vision=True,
                 extend_system_message=self.SYSTEM_PROMPT,
                 include_attributes=["data-testid", "aria-label", "aria-selected", "role"],
+                max_actions_per_step=3,
             )
 
             # Track step progress
@@ -327,7 +323,7 @@ click Export, select CSV format, and stop at the final confirmation.
             async def on_step_start(agent_instance):
                 current_step[0] += 1
                 step_start_time[0] = time.time()
-                self._log(f"🧠 Step {current_step[0]}/15: Agent analyzing page...")
+                self._log(f"🧠 Step {current_step[0]}/10: Agent analyzing page...")
 
             async def on_step_end(agent_instance):
                 step_duration = time.time() - step_start_time[0]
@@ -336,7 +332,7 @@ click Export, select CSV format, and stop at the final confirmation.
                     last_step = agent_instance.history.history[-1]
                     if last_step.model_output and last_step.model_output.action:
                         actions = last_step.model_output.action
-                        action_names = [a.__class__.__name__ for a in actions]
+                        action_names = [self._get_action_name(a) or "unknown" for a in actions]
                         action_summary = ", ".join(action_names)
                         self._log(f"✅ Step {current_step[0]}: {action_summary} ({step_duration:.2f}s)")
 
@@ -344,7 +340,7 @@ click Export, select CSV format, and stop at the final confirmation.
             agent_start = time.time()
             self._log("🤖 Running agent...")
             history = await agent.run(
-                max_steps=15,
+                max_steps=10,
                 on_step_start=on_step_start,
                 on_step_end=on_step_end,
             )
@@ -419,29 +415,33 @@ click Export, select CSV format, and stop at the final confirmation.
 
             # Process each action in the list
             for action_idx, action_item in enumerate(action_list):
-                action_type_name = action_item.__class__.__name__
-                self._log_verbose(f"    Action {action_idx + 1}: {action_type_name}")
+                # Get the real action name from the ActionModel's dynamic field
+                action_name = self._get_action_name(action_item)
+                self._log_verbose(f"    Action {action_idx + 1}: {action_name}")
 
-                # Parse action type from class name
-                action_type = self._parse_action_type(action_type_name)
-
-                if action_type in ("navigate", "scroll"):
-                    self._log_verbose(f"      ⏭️  Filtered {action_type}")
+                if not action_name:
+                    self._log_verbose(f"      ⚠️  Could not determine action name")
                     continue
 
+                # Parse action type (returns None for non-interactive actions)
+                action_type = self._parse_action_type(action_name)
+
                 if not action_type:
-                    self._log_verbose(f"      ⚠️  Unknown type: {action_type_name}")
+                    self._log_verbose(f"      ⏭️  Skipped non-interactive: {action_name}")
                     continue
 
                 # CRITICAL FIX: Get element from state.interacted_element LIST
                 element_info = self._get_element_from_state(step, action_idx)
 
-                # Get input value
+                # Get input value from the action's parameters
                 input_value = None
-                if hasattr(action_item, "text"):
-                    input_value = action_item.text
-                elif hasattr(action_item, "value"):
-                    input_value = action_item.value
+                try:
+                    action_data = action_item.model_dump(exclude_unset=True)
+                    params = action_data.get(action_name, {})
+                    if isinstance(params, dict):
+                        input_value = params.get("text") or params.get("value")
+                except Exception:
+                    pass
 
                 # Update URL from result if navigation occurred
                 if hasattr(step, "result") and step.result and len(step.result) > action_idx:
@@ -466,22 +466,59 @@ click Export, select CSV format, and stop at the final confirmation.
         self._log_verbose(f"Extracted {len(actions)} total actions")
         return actions
 
-    def _parse_action_type(self, action_class_name: str) -> str | None:
-        """Parse Browser Use action class name to our action type."""
-        name_lower = action_class_name.lower()
+    def _get_action_name(self, action_item: Any) -> str | None:
+        """Get the action name from a Browser Use ActionModel instance.
 
+        In Browser Use v0.11.9, actions are ActionModel instances with a single
+        dynamic field. The field name IS the action name (e.g., 'click', 'input',
+        'select_dropdown'). action_item.__class__.__name__ is always 'ActionModel'.
+        """
+        try:
+            action_data = action_item.model_dump(exclude_unset=True)
+            if action_data:
+                return next(iter(action_data.keys()))
+        except Exception:
+            pass
+        return None
+
+    def _parse_action_type(self, action_name: str) -> str | None:
+        """Map a Browser Use action name to our action type."""
+        # Map Browser Use action names to our types
+        ACTION_MAP = {
+            "click": "click",
+            "click_element": "click",
+            "input": "type",
+            "input_text": "type",
+            "type": "type",
+            "select_dropdown": "select",
+            "select_dropdown_option": "select",
+            "select": "select",
+        }
+
+        # Skip non-interactive actions that don't belong in the manifest
+        SKIP_ACTIONS = {
+            "navigate", "go_back", "scroll", "find_elements", "search_page",
+            "extract", "evaluate", "screenshot", "read_content", "wait",
+            "search", "switch_tab", "close_tab", "send_keys", "done",
+            "get_dropdown_options", "upload_file",
+        }
+
+        if action_name in SKIP_ACTIONS:
+            return None
+
+        if action_name in ACTION_MAP:
+            return ACTION_MAP[action_name]
+
+        # Fallback: try substring matching for unknown action names
+        name_lower = action_name.lower()
         if "click" in name_lower:
             return "click"
         elif "input" in name_lower or "type" in name_lower:
             return "type"
         elif "select" in name_lower:
             return "select"
-        elif "navigate" in name_lower or "goto" in name_lower:
-            return "navigate"
-        elif "scroll" in name_lower:
-            return "scroll"
-        else:
-            return None
+
+        return None
 
     def _get_element_from_state(self, step: Any, action_index: int) -> dict[str, Any]:
         """Get element information from Browser Use step state.
