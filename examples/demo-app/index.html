@@ -41,6 +41,99 @@
       background: #f5f5f5;
       min-height: 100vh;
       padding-top: 68px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    /* Dark mode */
+    body.dark-mode {
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    body.dark-mode .header {
+      background: #1f2937;
+      border-bottom-color: #374151;
+    }
+
+    body.dark-mode .card,
+    body.dark-mode .activity-panel,
+    body.dark-mode .modal,
+    body.dark-mode .footer-section {
+      background: #1f2937;
+      border-color: #374151;
+    }
+
+    body.dark-mode th {
+      background: #111827;
+      color: #9ca3af;
+    }
+
+    body.dark-mode td {
+      color: #d1d5db;
+    }
+
+    body.dark-mode tr:hover {
+      background: #374151;
+    }
+
+    body.dark-mode .page-title,
+    body.dark-mode .table-title,
+    body.dark-mode .activity-item-title,
+    body.dark-mode .activity-header,
+    body.dark-mode .footer-section-title,
+    body.dark-mode .modal-title,
+    body.dark-mode .form-label {
+      color: #f9fafb;
+    }
+
+    body.dark-mode .form-input,
+    body.dark-mode .form-select {
+      background: #374151;
+      border-color: #4b5563;
+      color: #f9fafb;
+    }
+
+    body.dark-mode .btn-secondary {
+      background: #374151;
+      color: #d1d5db;
+      border-color: #4b5563;
+    }
+
+    body.dark-mode .nav a {
+      color: #d1d5db;
+    }
+
+    body.dark-mode .nav a[data-testid="nav-data"] {
+      color: #818cf8;
+      background: #312e81;
+    }
+
+    body.dark-mode .dropdown-menu {
+      background: #1f2937;
+      border-color: #374151;
+    }
+
+    body.dark-mode .dropdown-item {
+      color: #d1d5db;
+    }
+
+    body.dark-mode .dropdown-item:hover {
+      background: #374151;
+    }
+
+    body.dark-mode .modal-header,
+    body.dark-mode .modal-footer,
+    body.dark-mode .table-header {
+      border-color: #374151;
+    }
+
+    body.dark-mode .footer-links a {
+      color: #9ca3af;
+    }
+
+    body.dark-mode .footer-bottom {
+      border-top-color: #374151;
+      color: #6b7280;
     }
 
     .logo {
@@ -864,6 +957,42 @@
     </div>
   </div>
 
+  <!-- Profile Modal -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal" role="dialog" aria-labelledby="profile-modal-title">
+      <div class="modal-header">
+        <h2 class="modal-title" id="profile-modal-title">My Profile</h2>
+        <button class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px;">
+          <div class="user-avatar" style="width:56px;height:56px;font-size:20px;">JD</div>
+          <div>
+            <div style="font-weight:600;font-size:16px;" data-testid="profile-name">Jane Doe</div>
+            <div style="color:#6b7280;font-size:14px;" data-testid="profile-email">jane.doe@example.com</div>
+            <div style="color:#6b7280;font-size:13px;" data-testid="profile-role">Administrator</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-input" data-testid="profile-name-input" value="Jane Doe" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" data-testid="profile-email-input" value="jane.doe@example.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <input type="text" class="form-input" data-testid="profile-role-input" value="Administrator" readonly style="background:#f9fafb;" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-testid="profile-cancel">Cancel</button>
+        <button class="btn btn-primary" data-testid="profile-save">Save Profile</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Clippi Widget -->
   <script type="module">
     // In production, import from CDN or npm package
@@ -872,123 +1001,214 @@
     // For demo, we'll use the local dev server
     // The clippi-chat element will be available after the build
 
-    // Demo: Handle modal interactions
-    const exportBtn = document.querySelector('[data-testid="export-btn"]')
-    const exportModal = document.getElementById('export-modal')
-    const createBtn = document.querySelector('[data-testid="create-dataset-btn"]')
-    const createModal = document.getElementById('create-modal')
-    const userDropdown = document.getElementById('user-dropdown')
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    function openModal(modal) { modal?.classList.add('open') }
+    function closeModal(modal) { modal?.classList.remove('open') }
 
-    // Export modal
-    exportBtn?.addEventListener('click', () => {
-      exportModal.classList.add('open')
-    })
+    // ─── References ─────────────────────────────────────────────────────────
+    const exportBtn      = document.querySelector('[data-testid="export-btn"]')
+    const exportModal    = document.getElementById('export-modal')
+    const createBtn      = document.querySelector('[data-testid="create-dataset-btn"]')
+    const createModal    = document.getElementById('create-modal')
+    const userDropdown   = document.getElementById('user-dropdown')
+    const tableBody      = document.querySelector('table tbody')
+    const searchInput    = document.querySelector('[data-testid="search-input"]')
 
+    // ─── Fix 1: Export modal ─────────────────────────────────────────────────
+    exportBtn?.addEventListener('click', () => openModal(exportModal))
     exportModal?.addEventListener('click', (e) => {
-      if (e.target === exportModal || e.target.closest('.modal-close') || e.target.closest('[data-testid="export-cancel"]')) {
-        exportModal.classList.remove('open')
+      if (e.target === exportModal || e.target.closest('.modal-close') ||
+          e.target.closest('[data-testid="export-cancel"]') ||
+          e.target.closest('[data-testid="export-confirm"]')) {
+        closeModal(exportModal)
       }
     })
 
-    // Create modal
+    // ─── Fix 2 (Critical): Create Dataset — actually appends a row ───────────
     createBtn?.addEventListener('click', () => {
-      createModal.classList.add('open')
+      // Reset form
+      document.querySelector('[data-testid="dataset-name-input"]').value = ''
+      document.querySelector('#create-modal [placeholder="Optional description..."]').value = ''
+      openModal(createModal)
     })
 
     createModal?.addEventListener('click', (e) => {
-      if (e.target === createModal || e.target.closest('.modal-close') || e.target.closest('[data-testid="create-cancel"]')) {
-        createModal.classList.remove('open')
+      if (e.target === createModal || e.target.closest('.modal-close') ||
+          e.target.closest('[data-testid="create-cancel"]')) {
+        closeModal(createModal)
+      }
+      if (e.target.closest('[data-testid="create-confirm"]')) {
+        const nameInput = document.querySelector('[data-testid="dataset-name-input"]')
+        const name = nameInput.value.trim()
+        if (!name) {
+          nameInput.style.borderColor = '#ef4444'
+          nameInput.placeholder = 'Name is required'
+          return
+        }
+        nameInput.style.borderColor = ''
+        // Append row to the table
+        const today = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })
+        const tr = document.createElement('tr')
+        tr.innerHTML = `
+          <td>${name}</td>
+          <td>0</td>
+          <td><span class="status status-pending">Processing</span></td>
+          <td>${today}</td>
+          <td><button class="btn btn-secondary" style="padding: 6px 12px">View</button></td>
+        `
+        tableBody.appendChild(tr)
+        closeModal(createModal)
       }
     })
 
-    // User dropdown
-    userDropdown?.querySelector('button')?.addEventListener('click', () => {
+    // ─── User dropdown ───────────────────────────────────────────────────────
+    userDropdown?.querySelector('[data-testid="user-menu-btn"]')?.addEventListener('click', (e) => {
+      e.stopPropagation()
       userDropdown.classList.toggle('open')
     })
-
     document.addEventListener('click', (e) => {
-      if (!userDropdown?.contains(e.target)) {
-        userDropdown?.classList.remove('open')
-      }
+      if (!userDropdown?.contains(e.target)) userDropdown?.classList.remove('open')
     })
 
-    // Import modal
-    const importBtn = document.querySelector('[data-testid="import-btn"]')
-    const importModal = document.getElementById('import-modal')
-    const importSource = document.querySelector('[data-testid="import-source"]')
+    // ─── Fix 3 (Critical): Import modal — file input validation ─────────────
+    const importBtn       = document.querySelector('[data-testid="import-btn"]')
+    const importModal     = document.getElementById('import-modal')
+    const importSource    = document.querySelector('[data-testid="import-source"]')
     const importFileGroup = document.getElementById('import-file-group')
-    const importUrlGroup = document.getElementById('import-url-group')
-    const importName = document.querySelector('[data-testid="import-name"]')
-    const importConfirm = document.querySelector('[data-testid="import-confirm"]')
+    const importUrlGroup  = document.getElementById('import-url-group')
+    const importFile      = document.querySelector('[data-testid="import-file"]')
+    const importUrl       = document.querySelector('[data-testid="import-url"]')
+    const importName      = document.querySelector('[data-testid="import-name"]')
+    const importConfirm   = document.querySelector('[data-testid="import-confirm"]')
 
-    importBtn?.addEventListener('click', () => {
-      importModal.classList.add('open')
-    })
+    importBtn?.addEventListener('click', () => openModal(importModal))
 
     importModal?.addEventListener('click', (e) => {
-      if (e.target === importModal || e.target.closest('.modal-close') || e.target.closest('[data-testid="import-cancel"]')) {
-        importModal.classList.remove('open')
-        // Reset form
+      if (e.target === importModal || e.target.closest('.modal-close') ||
+          e.target.closest('[data-testid="import-cancel"]') ||
+          (e.target.closest('[data-testid="import-confirm"]') && !importConfirm.disabled)) {
+        closeModal(importModal)
         importSource.value = ''
         importFileGroup.style.display = 'none'
         importUrlGroup.style.display = 'none'
+        if (importFile) importFile.value = ''
+        if (importUrl) importUrl.value = ''
         importName.value = ''
         importConfirm.disabled = true
       }
     })
 
-    // Show/hide fields based on source selection
     importSource?.addEventListener('change', () => {
       importFileGroup.style.display = importSource.value === 'file' ? 'block' : 'none'
-      importUrlGroup.style.display = importSource.value === 'url' ? 'block' : 'none'
+      importUrlGroup.style.display  = importSource.value === 'url'  ? 'block' : 'none'
       validateImportForm()
     })
 
-    // Validate import form
     function validateImportForm() {
       const hasSource = importSource.value !== ''
-      const hasName = importName.value.trim() !== ''
-      importConfirm.disabled = !(hasSource && hasName)
+      const hasName   = importName.value.trim() !== ''
+      let   hasInput  = true
+      if (importSource.value === 'file') hasInput = importFile?.files?.length > 0
+      if (importSource.value === 'url')  hasInput = importUrl?.value.trim() !== ''
+      importConfirm.disabled = !(hasSource && hasName && hasInput)
     }
 
     importName?.addEventListener('input', validateImportForm)
+    importFile?.addEventListener('change', validateImportForm)
+    importUrl?.addEventListener('input', validateImportForm)
 
-    // Settings modal
-    const settingsBtn = document.querySelector('[data-testid="nav-settings"]')
-    const settingsModal = document.getElementById('settings-modal')
-    const settingsTabs = document.querySelectorAll('.settings-tab')
+    // ─── Fix 4 (Major): Settings modal — apply theme on Save ─────────────────
+    const settingsBtn      = document.querySelector('[data-testid="nav-settings"]')
+    const settingsModal    = document.getElementById('settings-modal')
+    const settingsTabs     = document.querySelectorAll('.settings-tab')
     const settingsContents = document.querySelectorAll('.settings-content')
+    const themeSelect      = document.querySelector('[data-testid="settings-theme"]')
+
+    function applyTheme(value) {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      const isDark = value === 'dark' || (value === 'auto' && prefersDark)
+      document.body.classList.toggle('dark-mode', isDark)
+    }
 
     settingsBtn?.addEventListener('click', (e) => {
       e.preventDefault()
-      settingsModal.classList.add('open')
+      openModal(settingsModal)
     })
 
     settingsModal?.addEventListener('click', (e) => {
-      if (e.target === settingsModal || e.target.closest('.modal-close') || e.target.closest('[data-testid="settings-cancel"]')) {
-        settingsModal.classList.remove('open')
+      if (e.target === settingsModal || e.target.closest('.modal-close') ||
+          e.target.closest('[data-testid="settings-cancel"]')) {
+        closeModal(settingsModal)
+      }
+      if (e.target.closest('[data-testid="settings-save"]')) {
+        applyTheme(themeSelect?.value || 'light')
+        closeModal(settingsModal)
       }
     })
 
-    // Settings tabs
     settingsTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         const tabName = tab.dataset.tab
-
-        // Update active tab
-        settingsTabs.forEach(t => t.classList.remove('active'))
+        settingsTabs.forEach(t => { t.classList.remove('active'); t.removeAttribute('aria-selected') })
         tab.classList.add('active')
         tab.setAttribute('aria-selected', 'true')
-
-        // Show corresponding content
         settingsContents.forEach(content => {
           content.style.display = content.id === `settings-${tabName}` ? 'block' : 'none'
         })
       })
     })
-
-    // Mark active tab with aria-selected
     document.querySelector('.settings-tab.active')?.setAttribute('aria-selected', 'true')
+
+    // ─── Fix 4 (Major): Profile modal ────────────────────────────────────────
+    const profileLink  = document.querySelector('[data-testid="profile-link"]')
+    const profileModal = document.getElementById('profile-modal')
+
+    profileLink?.addEventListener('click', (e) => {
+      e.preventDefault()
+      userDropdown?.classList.remove('open')
+      openModal(profileModal)
+    })
+
+    profileModal?.addEventListener('click', (e) => {
+      if (e.target === profileModal || e.target.closest('.modal-close') ||
+          e.target.closest('[data-testid="profile-cancel"]')) {
+        closeModal(profileModal)
+      }
+      if (e.target.closest('[data-testid="profile-save"]')) {
+        const nameInput  = document.querySelector('[data-testid="profile-name-input"]')
+        const emailInput = document.querySelector('[data-testid="profile-email-input"]')
+        // Update the display name in the header avatar title
+        document.querySelector('[data-testid="profile-name"]').textContent  = nameInput.value
+        document.querySelector('[data-testid="profile-email"]').textContent = emailInput.value
+        closeModal(profileModal)
+      }
+    })
+
+    // ─── Fix 5 (Major): Search — real-time dataset filtering ─────────────────
+    let emptyState = null
+
+    searchInput?.addEventListener('input', () => {
+      const query = searchInput.value.trim().toLowerCase()
+      const rows  = tableBody.querySelectorAll('tr')
+      let   visibleCount = 0
+
+      rows.forEach(row => {
+        const name = row.querySelector('td')?.textContent.toLowerCase() ?? ''
+        const match = name.includes(query)
+        row.style.display = match ? '' : 'none'
+        if (match) visibleCount++
+      })
+
+      // Show/hide empty state message
+      if (!emptyState) {
+        emptyState = document.createElement('tr')
+        emptyState.id = 'search-empty-state'
+        emptyState.innerHTML = `<td colspan="5" style="text-align:center;color:#9ca3af;padding:32px;">No datasets match "<span id="search-query-text"></span>"</td>`
+        tableBody.appendChild(emptyState)
+      }
+      emptyState.style.display = (query && visibleCount === 0) ? '' : 'none'
+      document.getElementById('search-query-text').textContent = query
+    })
   </script>
 
   <!-- Clippi Chat Widget -->

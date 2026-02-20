@@ -1,0 +1,15 @@
+{
+  "url": "http://localhost:3000",
+  "tasks": [
+    "export data to CSV",
+    "create a new dataset",
+    "import data from a file",
+    "change the theme to dark mode",
+    "configure notification settings",
+    "find my API key",
+    "view my profile",
+    "search datasets"
+  ],
+  "output_path": "./guide.manifest.json",
+  "headless": true
+}

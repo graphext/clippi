@@ -206,8 +206,24 @@ export class StepSequencer extends EventEmitter {
       this.debug("Selector not found after waiting", step.selector);
       // Still emit the step - cursor package can handle missing elements
     } else {
-      // Check actionability and scroll into view if needed
-      const actionability = isActionable(result.element);
+      // Check actionability and handle non-actionable states
+      let actionability = isActionable(result.element);
+
+      if (!actionability.ok && actionability.reason === "disabled") {
+        // Element is disabled (e.g., form submit button before validation)
+        // Wait up to 5s for it to become enabled, but still show the step
+        // even if it stays disabled — the cursor can point to disabled elements
+        this.debug("Element is disabled, waiting for it to become enabled...");
+        const enabledResult = await this.waitForEnabled(result.element, 5000, 200);
+        if (this.state !== "active") return;
+        if (enabledResult) {
+          this.debug("Element became enabled");
+          actionability = isActionable(result.element);
+        } else {
+          this.debug("Element still disabled after waiting, showing anyway");
+        }
+      }
+
       if (!actionability.ok && actionability.reason === "out_of_viewport") {
         scrollIntoViewIfNeeded(result.element);
       }
@@ -365,6 +381,49 @@ export class StepSequencer extends EventEmitter {
     this.observer.stop();
     this.target = null;
     this.currentStepIndex = 0;
+  }
+
+  /**
+   * Wait for an element to become enabled (not disabled)
+   *
+   * @param element The element to check
+   * @param timeout Maximum time to wait in ms
+   * @param interval Polling interval in ms
+   * @returns true if element became enabled, false if timeout
+   */
+  private waitForEnabled(
+    element: Element,
+    timeout = 5000,
+    interval = 200,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      const startTime = Date.now();
+
+      const check = () => {
+        if (this.state !== "active") {
+          resolve(false);
+          return;
+        }
+
+        const isDisabled =
+          "disabled" in element &&
+          (element as HTMLButtonElement).disabled;
+
+        if (!isDisabled) {
+          resolve(true);
+          return;
+        }
+
+        if (Date.now() - startTime >= timeout) {
+          resolve(false);
+          return;
+        }
+
+        setTimeout(check, interval);
+      };
+
+      check();
+    });
   }
 
   /**

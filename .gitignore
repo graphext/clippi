@@ -233,5 +233,8 @@ Thumbs.db
 # Coverage
 coverage/
 
+# Generated manifests (partial)
+*.manifest.json.part
+
 # Claude
 .claude/settings.local.json

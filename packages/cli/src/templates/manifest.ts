@@ -49,6 +49,23 @@ export default {
     // URL to validate selectors against (requires playwright)
     // url: 'http://localhost:3000',
   },
+
+  // AI Agent configuration (for clippi generate)
+  agent: {
+    // LLM provider: 'gemini' (default), 'openai', or 'anthropic'
+    provider: 'gemini',
+
+    // Model to use (default: gemini-3-flash-preview)
+    // Gemini 3 Flash is recommended for best cost/performance ratio
+    // Estimated cost: ~$0.50-1.50 for 20 flows
+    model: 'gemini-3-flash-preview',
+
+    // Run browser in headless mode (default: true)
+    headless: true,
+
+    // Timeout for browser operations in ms (default: 30000)
+    timeout: 30000,
+  },
 }
 `
 
