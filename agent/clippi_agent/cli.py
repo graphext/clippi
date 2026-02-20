@@ -17,7 +17,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .agent import run_agent
+from .agent import rebuild_manifest_from_actions, run_agent
 from .schemas import AgentConfig, AgentTask
 
 
@@ -139,6 +139,13 @@ Environment variables:
         "-t",
         type=str,
         help="Path to tasks file (one task per line, or JSON array)",
+    )
+    
+    # Fast path argument
+    parser.add_argument(
+        "--rebuild-from-actions",
+        type=str,
+        help="Path to an existing .actions.json file to rebuild the manifest from, bypassing the LLM",
     )
 
     # Optional arguments
@@ -269,31 +276,31 @@ Environment variables:
 
     # Run the agent
     try:
-        asyncio.run(run_agent(config))
+        if args.rebuild_from_actions:
+            asyncio.run(rebuild_manifest_from_actions(config, args.rebuild_from_actions))
+        else:
+            asyncio.run(run_agent(config))
     except KeyboardInterrupt:
         print("\n⚠️  Interrupted by user")
         sys.exit(130)
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        if args.verbose:
-            import traceback
-            print("\n" + "=" * 60)
-            print("Full traceback:")
-            print("=" * 60)
-            traceback.print_exc()
-            print("\n" + "=" * 60)
-            print("Diagnostics:")
-            print("=" * 60)
-            print(f"  Python: {sys.version}")
-            print(f"  Working directory: {os.getcwd()}")
-            try:
-                import browser_use
-                print(f"  Browser Use version: {browser_use.__version__}")
-            except Exception:
-                print(f"  Browser Use: (could not determine version)")
-            print("=" * 60)
-        else:
-            print("\nRun with --verbose for full diagnostics")
+        import traceback
+        print("\n" + "=" * 60)
+        print("Full traceback:")
+        print("=" * 60)
+        traceback.print_exc()
+        print("\n" + "=" * 60)
+        print("Diagnostics:")
+        print("=" * 60)
+        print(f"  Python: {sys.version}")
+        print(f"  Working directory: {os.getcwd()}")
+        try:
+            import browser_use
+            print(f"  Browser Use version: {browser_use.__version__}")
+        except Exception:
+            print(f"  Browser Use: (could not determine version)")
+        print("=" * 60)
         sys.exit(1)
 
 

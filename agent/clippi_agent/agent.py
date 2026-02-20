@@ -110,7 +110,13 @@ def extract_selectors_from_element(element_info: dict[str, Any]) -> Selector:
             SelectorStrategy(type="testId", value=attrs["data-testid"])
         )
 
-    # Priority 2: aria-label
+    # Priority 2: xpath
+    if "xpath" in element_info and element_info["xpath"]:
+        strategies.append(
+            SelectorStrategy(type="xpath", value=element_info["xpath"])
+        )
+
+    # Priority 3: aria-label
     if "aria-label" in attrs:
         strategies.append(SelectorStrategy(type="aria", value=attrs["aria-label"]))
 
@@ -161,9 +167,49 @@ def infer_success_condition(
         if len(path) > 1:
             return SuccessCondition(url_contains=f"/{path[1]}")
 
-    # If next action targets a different element, the current action likely
-    # made something appear - but we can't easily detect this without DOM analysis
-    # For now, return None and rely on manual refinement or future improvement
+    if action.resulting_state:
+        # Check elements added first
+        if "elements_added" in action.resulting_state:
+            added = action.resulting_state["elements_added"]
+            if added:
+                for el in added:
+                    attrs = el.get("attributes", {})
+                    if "data-testid" in attrs:
+                        return SuccessCondition(visible=f"[data-testid='{attrs['data-testid']}']")
+                    elif "id" in attrs:
+                        return SuccessCondition(visible=f"#{attrs['id']}")
+                
+                # Fallback to the first element's tag + class if available
+                first_el = added[0]
+                tag = first_el.get("tag", "div")
+                attrs = first_el.get("attributes", {})
+                if "class" in attrs and attrs["class"]:
+                    cls = attrs["class"].split()[0]
+                    return SuccessCondition(visible=f"{tag}.{cls}")
+                
+                return SuccessCondition(visible=tag)
+
+        # Check elements modified next (e.g., modal opening)
+        if "elements_modified" in action.resulting_state:
+            modified = action.resulting_state["elements_modified"]
+            if modified:
+                for el in modified:
+                    attrs = el.get("attributes", {})
+                    changed = el.get("changed")
+                    
+                    if "id" in attrs:
+                        selector = f"#{attrs['id']}"
+                        if changed == "class" and "class" in attrs:
+                            # Use the last class added
+                            classes = attrs["class"].split()
+                            if classes:
+                                selector += f".{classes[-1]}"
+                        return SuccessCondition(visible=selector)
+                    elif "data-testid" in attrs:
+                        return SuccessCondition(visible=f"[data-testid='{attrs['data-testid']}']")
+
+    if action.action_type in ("click", "type", "select"):
+        return SuccessCondition(click=True)
 
     return None
 
@@ -229,8 +275,12 @@ when finished. Do NOT navigate to external sites.
 ## Interaction Strategy (IMPORTANT)
 
 - ALWAYS try clicking elements by their index first. The page state shows indexed interactive elements.
+- Modern UI modals (e.g. Radix/Shadcn) and dropdowns may take a moment to animate in. If an expected element is not immediately available, you may need to wait or use `data-testid` via JavaScript.
 - If an element you need (e.g., inside a modal or dropdown) is NOT indexed, use `evaluate` with \
-JavaScript to click it directly. Example: `document.querySelector('[data-testid="my-btn"]').click()`
+JavaScript to click it directly.
+- **CRITICAL EXCEPTION FOR EVALUATE**: When using `evaluate` to interact with an element, you \
+MUST make your JavaScript return a JSON string describing it. Example: \
+`const el = document.querySelector('[data-testid="my-btn"]'); el.click(); return JSON.stringify({tag: el.tagName, text: el.textContent, attributes: {'data-testid': el.getAttribute('data-testid')}});`
 - Do NOT call `find_elements` more than once per modal/dialog. If `find_elements` does not give \
 you a clickable index, switch to `evaluate` immediately.
 - NEVER repeat the same `find_elements` call. If you already tried it, use a different approach.
@@ -240,8 +290,10 @@ you a clickable index, switch to `evaluate` immediately.
 Each click, type, and select action captures the element's tag, text, and attributes \
 (data-testid, aria-label, id, class). This generates a manifest for visual cursor guidance.
 
-## Output Quality
+## Output Quality & Hallucination Prevention
 
+- **CRITICAL**: Before calling `done`, you MUST verify the final state. If you opened a dropdown or a menu, you MUST wait or interact with the next element inside it first.
+- Do NOT hallucinate dialogs or modals being open if they are not present in the browser state.
 - Prefer elements with `data-testid` or `aria-label` (stable selectors).
 - Navigate via the app's UI (nav bar, sidebar, menus), not by URL.
 - Complete multi-step flows fully (e.g., for "export to CSV": click Export, select CSV, confirm).
@@ -305,6 +357,17 @@ Each click, type, and select action captures the element's tag, text, and attrib
         self._log(f"✅ Browser ready ({timing.browser_startup_ms/1000:.2f}s)")
 
         try:
+            # Track step progress
+            current_step = [0]  # Use list for closure modification
+            step_start_time = [0.0]  # Track when each step starts
+            step_dom_items = []
+
+            async def on_new_step(state, output, step):
+                if hasattr(state, "dom_state") and hasattr(state.dom_state, "selector_map"):
+                    step_dom_items.append(state.dom_state.selector_map)
+                else:
+                    step_dom_items.append({})
+
             # Build agent
             agent = Agent(
                 task=self._build_task_prompt(task),
@@ -314,11 +377,8 @@ Each click, type, and select action captures the element's tag, text, and attrib
                 extend_system_message=self.SYSTEM_PROMPT,
                 include_attributes=["data-testid", "aria-label", "aria-selected", "role"],
                 max_actions_per_step=3,
+                register_new_step_callback=on_new_step,
             )
-
-            # Track step progress
-            current_step = [0]  # Use list for closure modification
-            step_start_time = [0.0]  # Track when each step starts
 
             async def on_step_start(agent_instance):
                 current_step[0] += 1
@@ -350,7 +410,7 @@ Each click, type, and select action captures the element's tag, text, and attrib
             # Time action extraction
             extract_start = time.time()
             self._log("📊 Extracting actions...")
-            flow.actions = self._extract_actions_from_history(history)
+            flow.actions = self._extract_actions_from_history(history, step_dom_items)
             timing.extraction_ms = (time.time() - extract_start) * 1000
             self._log(f"✅ Extracted {len(flow.actions)} actions ({timing.extraction_ms/1000:.2f}s)")
 
@@ -374,8 +434,9 @@ Each click, type, and select action captures the element's tag, text, and attrib
         return flow
 
     def _extract_actions_from_history(
-        self, history: Any
+        self, history: Any, step_dom_items: list[dict] = None
     ) -> list[RecordedAction]:
+        step_dom_items = step_dom_items or []
         """Extract recorded actions from Browser Use agent history."""
         actions: list[RecordedAction] = []
 
@@ -439,9 +500,28 @@ Each click, type, and select action captures the element's tag, text, and attrib
                     action_data = action_item.model_dump(exclude_unset=True)
                     params = action_data.get(action_name, {})
                     if isinstance(params, dict):
-                        input_value = params.get("text") or params.get("value")
+                        input_value = params.get("text") or params.get("value") or params.get("keys")
+                        
+                        # Special handling for select actions
+                        if action_type == "select" and "index" in params:
+                             input_value = self._get_dropdown_option_from_state(step, params["index"])
                 except Exception:
                     pass
+
+                # If evaluate, parse the extracted_content as JSON to get the spoofed element
+                if action_name == "evaluate" and hasattr(step, "result") and step.result and len(step.result) > action_idx:
+                    try:
+                        ext_content = step.result[action_idx].extracted_content
+                        if ext_content:
+                            parsed_elem = json.loads(ext_content)
+                            if isinstance(parsed_elem, dict) and "tag" in parsed_elem:
+                                element_info["tag"] = parsed_elem.get("tag", "").lower()
+                                element_info["text"] = parsed_elem.get("text", "")
+                                element_info["attributes"] = parsed_elem.get("attributes", {})
+                                # Change action to click for path building if it's evaluate
+                                action_type = "click"
+                    except Exception:
+                        pass
 
                 # Update URL from result if navigation occurred
                 if hasattr(step, "result") and step.result and len(step.result) > action_idx:
@@ -449,22 +529,127 @@ Each click, type, and select action captures the element's tag, text, and attrib
                     if hasattr(result_item, "url") and result_item.url:
                         url_after = result_item.url
 
-                recorded = RecordedAction(
-                    action_type=action_type,
-                    element_tag=element_info.get("tag"),
-                    element_text=element_info.get("text"),
-                    element_attributes=element_info.get("attributes", {}),
-                    input_value=input_value,
-                    url_before=url_before,
-                    url_after=url_after,
-                    timestamp=time.time(),
-                )
+                # Extract xpath from DOMInteractedElement if available
+                xpath = element_info.get("xpath")
 
-                actions.append(recorded)
-                self._log_verbose(f"      ✅ Recorded {action_type}")
+                try:
+                    recorded = RecordedAction(
+                        action_type=action_type,
+                        element_tag=element_info.get("tag"),
+                        element_text=element_info.get("text"),
+                        element_attributes=element_info.get("attributes", {}),
+                        xpath=xpath,
+                        input_value=input_value,
+                        url_before=url_before,
+                        url_after=url_after,
+                        timestamp=time.time(),
+                        resulting_state=None,  # Will be populated after looping
+                    )
+
+                    actions.append(recorded)
+                    self._log_verbose(f"      ✅ Recorded {action_type}")
+                except Exception as e:
+                    self._log_verbose(f"      ❌ Failed to record action {action_type}: {e}")
+                    self._log_verbose(f"         Data: tag={element_info.get('tag')} attrs={element_info.get('attributes')}")
 
         self._log_verbose(f"Extracted {len(actions)} total actions")
+
+        # Now compute DOM diffs for resulting_state if possible
+        self._compute_and_assign_dom_diffs(actions, history, step_dom_items)
+
         return actions
+
+    def _compute_and_assign_dom_diffs(self, actions: list[RecordedAction], history: Any, step_dom_items: list[dict]) -> None:
+        """Compute differences between steps to populate resulting_state."""
+        if not actions or not history or not hasattr(history, "history"):
+            return
+
+        action_idx = 0
+        for step_idx in range(len(history.history) - 1):
+            step = history.history[step_idx]
+
+            if not hasattr(step, "model_output") or not step.model_output:
+                continue
+            
+            action_list = step.model_output.action
+            if not action_list:
+                continue
+
+            # Assuming the last interactive action in this step caused the DOM change
+            interactive_actions = [a for a in action_list if self._get_action_name(a) not in {"navigate", "go_back", "scroll", "find_elements", "search_page", "extract", "screenshot", "read_content", "wait", "search", "switch_tab", "close_tab", "done", "get_dropdown_options", "upload_file"}]
+            if not interactive_actions:
+                continue
+                
+            # Advance action_idx to the last interactive action of this step
+            action_idx += len(interactive_actions) - 1
+            if action_idx >= len(actions):
+                break
+                
+            current_action = actions[action_idx]
+
+            curr_selector_map = step_dom_items[step_idx] if step_idx < len(step_dom_items) else {}
+            next_selector_map = step_dom_items[step_idx + 1] if step_idx + 1 < len(step_dom_items) else {}
+
+            curr_items = list(curr_selector_map.values())
+            next_items = list(next_selector_map.values())
+
+            print(f"DEBUG: step {step_idx} DOM items length = {len(curr_items)}")
+            
+            curr_paths = {}
+            for item in curr_items:
+                xp = getattr(item, "x_path", None) or getattr(item, "xpath", None)
+                if xp:
+                    curr_paths[xp] = item
+                    
+            next_paths = {}
+            for item in next_items:
+                xp = getattr(item, "x_path", None) or getattr(item, "xpath", None)
+                if xp:
+                    next_paths[xp] = item
+
+            added_xpaths = set(next_paths.keys()) - set(curr_paths.keys())
+            print(f"DEBUG: step {step_idx} added_xpaths count = {len(added_xpaths)}")
+            
+            elements_added = []
+            for xp in list(added_xpaths)[:5]:  # Limit to 5 for brevity
+                item = next_paths[xp]
+                el_data = {
+                    "tag": getattr(item, "node_name", "Unknown").lower(),
+                    "attributes": {}
+                }
+                if hasattr(item, "attributes") and item.attributes:
+                    try:
+                        el_data["attributes"] = dict(item.attributes)
+                    except Exception:
+                        pass
+                elements_added.append(el_data)
+                
+            elements_modified = []
+            for xp, curr_item in curr_paths.items():
+                if xp in next_paths:
+                    next_item = next_paths[xp]
+                    curr_attrs = dict(getattr(curr_item, "attributes", {}) or {})
+                    next_attrs = dict(getattr(next_item, "attributes", {}) or {})
+                    
+                    if curr_attrs.get("class") != next_attrs.get("class") or curr_attrs.get("style") != next_attrs.get("style"):
+                        el_data = {
+                            "tag": getattr(next_item, "node_name", "Unknown").lower(),
+                            "attributes": next_attrs,
+                            "xpath": xp,
+                            "changed": "class" if curr_attrs.get("class") != next_attrs.get("class") else "style"
+                        }
+                        elements_modified.append(el_data)
+                        if len(elements_modified) >= 5:
+                            break
+
+            if elements_added or elements_modified:
+                current_action.resulting_state = {}
+                if elements_added:
+                    current_action.resulting_state["elements_added"] = elements_added
+                if elements_modified:
+                    current_action.resulting_state["elements_modified"] = elements_modified
+            
+            action_idx += 1
 
     def _get_action_name(self, action_item: Any) -> str | None:
         """Get the action name from a Browser Use ActionModel instance.
@@ -490,6 +675,7 @@ Each click, type, and select action captures the element's tag, text, and attrib
             "input": "type",
             "input_text": "type",
             "type": "type",
+            "send_keys": "type",
             "select_dropdown": "select",
             "select_dropdown_option": "select",
             "select": "select",
@@ -498,10 +684,13 @@ Each click, type, and select action captures the element's tag, text, and attrib
         # Skip non-interactive actions that don't belong in the manifest
         SKIP_ACTIONS = {
             "navigate", "go_back", "scroll", "find_elements", "search_page",
-            "extract", "evaluate", "screenshot", "read_content", "wait",
-            "search", "switch_tab", "close_tab", "send_keys", "done",
+            "extract", "screenshot", "read_content", "wait",
+            "search", "switch_tab", "close_tab", "done",
             "get_dropdown_options", "upload_file",
         }
+
+        if action_name == "evaluate":
+            return "evaluate"
 
         if action_name in SKIP_ACTIONS:
             return None
@@ -554,7 +743,23 @@ Each click, type, and select action captures the element's tag, text, and attrib
             element_info["text"] = elem.node_value
 
         if hasattr(elem, "attributes") and elem.attributes:
-            element_info["attributes"] = dict(elem.attributes)
+            try:
+                attrs = dict(elem.attributes)
+                # Pydantic validation requires dict[str, str], so force all values to str
+                element_info["attributes"] = {str(k): str(v) if v is not None else "" for k, v in attrs.items()}
+            except Exception as e:
+                self._log_verbose(f"        Warning: Failed to parse attributes: {e}")
+                element_info["attributes"] = {}
+
+        # In browser_use 0.11.9, DOMInteractedElement uses x_path instead of xpath
+        if hasattr(elem, "x_path") and elem.x_path:
+            element_info["xpath"] = elem.x_path
+            print(f"DEBUG: extracted xpath {elem.x_path}")
+        elif hasattr(elem, "xpath") and elem.xpath:
+            element_info["xpath"] = elem.xpath
+            print(f"DEBUG: extracted xpath {elem.xpath}")
+        else:
+            print(f"DEBUG: no xpath on interacted element {elem}")
 
         # Use ax_name as fallback text
         if not element_info.get("text") and hasattr(elem, "ax_name") and elem.ax_name:
@@ -563,6 +768,34 @@ Each click, type, and select action captures the element's tag, text, and attrib
         self._log_verbose(f"        Element: {element_info.get('tag', '?')} - {element_info.get('text', '')[:30]}")
 
         return element_info
+
+    def _get_dropdown_option_from_state(self, step: Any, index: int) -> str | None:
+        """Helper to get the text or value of a dropdown option by index from the state."""
+        if not hasattr(step, "state") or not step.state:
+            return None
+            
+        interacted_elements = getattr(step.state, "interacted_element", [])
+        if not interacted_elements:
+             # Try falling back to items if interacted_element is empty
+             interacted_elements = getattr(step.state, "items", getattr(step.state, "dom_items", []))
+             
+        if not interacted_elements or isinstance(interacted_elements, dict):
+            return str(index)
+            
+        # If it's a list, try doing a lookup
+        try:
+           # Find the element with the matching index in the state
+           for item in interacted_elements:
+               if hasattr(item, "highlight_index") and item.highlight_index == index:
+                   if hasattr(item, "node_value") and item.node_value:
+                        return item.node_value
+                   if hasattr(item, "attributes") and item.attributes:
+                        if "value" in item.attributes:
+                            return item.attributes["value"]
+        except Exception:
+           pass
+           
+        return str(index)
 
     def convert_flow_to_target(self, flow: RecordedFlow) -> ManifestTarget | None:
         """Convert a recorded flow to a manifest target."""
@@ -585,6 +818,7 @@ Each click, type, and select action captures the element's tag, text, and attrib
                 "tag": action.element_tag or "div",
                 "text": action.element_text or "",
                 "attributes": action.element_attributes,
+                "xpath": action.xpath,
             }
 
             selector = extract_selectors_from_element(element_info)
@@ -635,7 +869,7 @@ Each click, type, and select action captures the element's tag, text, and attrib
             label=label,
             description=task.description,
             keywords=keywords,
-            path=path if len(path) > 1 else None,
+            path=path if path else None,
         )
 
     def _generate_instruction(self, action: RecordedAction) -> str:
@@ -752,6 +986,13 @@ Each click, type, and select action captures the element's tag, text, and attrib
                 if target:
                     targets.append(target)
                     self._write_partial_manifest(targets)
+                    
+                    # Also persist recorded actions
+                    actions_path = self.config.output_path + ".actions.json"
+                    with open(actions_path, "w") as af:
+                        actions_dict = [f.model_dump(exclude_none=True) for f in self.recorded_flows]
+                        json.dump(actions_dict, af, indent=2)
+                        
                     step_count = len(target.path) if target.path else 1
                     print(f"   ✅ Generated target: {target.id} ({step_count} steps) - {elapsed:.1f}s")
                 else:
@@ -766,8 +1007,8 @@ Each click, type, and select action captures the element's tag, text, and attrib
             print("-" * 79)
 
             for timing in self.timings:
-                task, total, browser, agent, extract = timing.format_row()
-                print(f"{task:<38} {total:>8} {browser:>8} {agent:>8} {extract:>8}")
+                task_name, total_time, browser, agent_time, extract = timing.format_row()
+                print(f"{task_name:<38} {total_time:>8} {browser:>8} {agent_time:>8} {extract:>8}")
 
             total_ms = sum(t.total_ms for t in self.timings)
             print("-" * 79)
@@ -807,6 +1048,46 @@ Each click, type, and select action captures the element's tag, text, and attrib
         return hostname.title()
 
 
+async def rebuild_manifest_from_actions(config: AgentConfig, actions_path: str) -> Manifest:
+    """Rebuild a manifest entirely from an existing recorded actions file without creating LLM LLM tasks."""
+    print(f"\n🚀 Rebuilding manifest from {actions_path}")
+    
+    agent = ClippiAgent(config)
+    
+    with open(actions_path, "r") as f:
+        data = json.load(f)
+        
+    targets = []
+    
+    for flow_data in data:
+        flow = RecordedFlow(**flow_data)
+        
+        # Only valid completed flows are dumped but let's be safe
+        if flow.success:
+            target = agent.convert_flow_to_target(flow)
+            if target:
+                targets.append(target)
+                step_count = len(target.path) if target.path else 1
+                print(f"   ✅ Generated target: {target.id} ({step_count} steps)")
+            else:
+                print(f"   ⚠️  Flow {flow.task.description} succeeded but no steps recorded")
+        else:
+            print(f"   ❌ Flow failed: {flow.error}")
+            
+    print(f"✨ Rebuilt manifest with {len(targets)} targets")
+    
+    manifest = agent._build_manifest(targets)
+    
+    # Write final rebuilt manifest
+    output_path = config.output_path
+    with open(output_path, "w") as f:
+        manifest_dict = manifest.model_dump(by_alias=True, exclude_none=True)
+        json.dump(manifest_dict, f, indent=2)
+
+    print(f"\n📄 Manifest written to: {output_path}")
+    return manifest
+
+
 async def run_agent(config: AgentConfig) -> Manifest:
     """Main entry point for running the agent."""
     agent = ClippiAgent(config)
@@ -824,4 +1105,7 @@ async def run_agent(config: AgentConfig) -> Manifest:
         os.remove(part_path)
 
     print(f"\n📄 Manifest written to: {output_path}")
+    actions_path = output_path + ".actions.json"
+    if os.path.exists(actions_path):
+        print(f"📼 Raw actions saved to: {actions_path}")
     return manifest

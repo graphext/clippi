@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -98,7 +98,7 @@ class AgentConfig(BaseModel):
 class SelectorStrategy(BaseModel):
     """A selector strategy for finding an element."""
 
-    type: Literal["testId", "aria", "css", "text"] = Field(
+    type: Literal["testId", "aria", "css", "text", "xpath"] = Field(
         ...,
         description="Type of selector",
     )
@@ -265,15 +265,17 @@ class Manifest(BaseModel):
 class RecordedAction(BaseModel):
     """An action recorded during exploration."""
 
-    action_type: Literal["click", "type", "select", "navigate", "scroll"]
+    action_type: Literal["click", "type", "select", "navigate", "scroll", "send_keys", "fill"]
     element_tag: str | None = None
     element_text: str | None = None
     element_attributes: dict[str, str] = Field(default_factory=dict)
+    xpath: str | None = None
     input_value: str | None = None
     url_before: str
     url_after: str
     timestamp: float
     screenshot_path: str | None = None
+    resulting_state: dict[str, Any] | None = None
 
 
 class RecordedFlow(BaseModel):
