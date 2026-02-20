@@ -278,11 +278,59 @@ class RecordedAction(BaseModel):
     resulting_state: dict[str, Any] | None = None
 
 
+class ReflectedAction(BaseModel):
+    """A single essential action identified by LLM reflection.
+
+    Instead of recording every browser action and trying to deduplicate,
+    the LLM reflects on its exploration and reports only the actions a
+    real user would need to complete the task.
+    """
+
+    action: Literal["click", "type", "select"] = Field(
+        ...,
+        description="The type of user action",
+    )
+    instruction: str = Field(
+        ...,
+        description="Human-readable instruction, e.g. 'Click the Export button'",
+    )
+    source_action_index: int | None = Field(
+        default=None,
+        description="Index into the recorded actions list for the raw action this step corresponds to. "
+        "Used to recover element metadata (selectors, attributes) from the recording.",
+    )
+    element: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Element descriptor with tag, text, and attributes (data-testid, aria-label, etc.)",
+    )
+    input_value: str | None = Field(
+        default=None,
+        description="Value to type or select (for 'type' and 'select' actions)",
+    )
+    is_final: bool = Field(
+        default=False,
+        description="Whether this is the last step in the flow",
+    )
+
+
+class ReflectedFlow(BaseModel):
+    """The LLM's reflection on what essential steps are needed for a task."""
+
+    steps: list[ReflectedAction] = Field(
+        ...,
+        description="The minimal ordered list of user actions to complete the task",
+    )
+
+
 class RecordedFlow(BaseModel):
     """A complete recorded flow for a task."""
 
     task: AgentTask
     actions: list[RecordedAction] = Field(default_factory=list)
+    reflected_actions: list[ReflectedAction] | None = Field(
+        default=None,
+        description="LLM-reflected essential actions (replaces heuristic dedup)",
+    )
     success: bool = False
     error: str | None = None
     duration_ms: float = 0

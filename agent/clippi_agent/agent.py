@@ -34,6 +34,8 @@ from .schemas import (
     PathStep,
     RecordedAction,
     RecordedFlow,
+    ReflectedAction,
+    ReflectedFlow,
     Selector,
     SelectorStrategy,
     SuccessCondition,
@@ -364,6 +366,43 @@ wait for modal → select CSV format in dropdown → click the modal's Export/Co
         elapsed = time.time() - self._task_start_time
         print(f"   [{elapsed:6.2f}s] {message}")
 
+    REFLECTION_PROMPT = """You just explored a web application to complete a task. Now reflect on \
+what you did and identify ONLY the essential user-facing steps needed to accomplish the task.
+
+## Your Job
+
+Given the task description and the full history of recorded actions (indexed from 0), \
+produce the MINIMAL sequence of actions a real user would need.
+
+## Rules
+
+1. **Only include actions the user needs to perform.** If you clicked around to understand \
+the UI, those exploratory clicks should NOT be in the output.
+2. **Remove duplicates.** If you clicked the same button multiple times (e.g., retrying), \
+include it only once.
+3. **Remove noise.** If you clicked something unrelated to the task (e.g., clicked a menu \
+then went back), exclude it.
+4. **Include the complete flow.** Don't stop short — if the task requires clicking a confirm \
+button in a modal, include that step.
+5. **But don't overshoot.** If the task is "find my API key", the final step is navigating \
+to the API key section — do NOT include "Save Changes" or other actions beyond the task goal.
+6. **Use human-friendly instructions.** Each step should have a clear instruction like \
+'Click the "Export" button' or 'Select "CSV" from the format dropdown'.
+7. **Mark the last step as is_final=true.**
+8. **CRITICAL: Always set source_action_index** to the index of the recorded action this step \
+corresponds to. This is how we recover the element's selectors (data-testid, aria-label, etc.) \
+from the recording. If the step doesn't map to any recorded action (rare), set it to null.
+
+## Output Format
+
+Return a JSON object with a "steps" array. Each step has:
+- action: "click" | "type" | "select"
+- instruction: human-readable instruction
+- source_action_index: index into the recorded actions array (REQUIRED)
+- input_value: value for type/select actions (null for clicks)
+- is_final: true only for the last step
+"""
+
     def _build_task_prompt(self, task: AgentTask) -> str:
         """Build the task prompt for the Browser Use agent."""
         parts = [
@@ -468,12 +507,22 @@ wait for modal → select CSV format in dropdown → click the modal's Export/Co
             timing.agent_execution_ms = (time.time() - agent_start) * 1000
             self._log(f"✅ Agent completed ({timing.agent_execution_ms/1000:.2f}s)")
 
-            # Time action extraction
+            # Time action extraction (raw recording for debugging)
             extract_start = time.time()
-            self._log("📊 Extracting actions...")
+            self._log("📊 Extracting raw actions...")
             flow.actions = self._extract_actions_from_history(history, step_dom_items)
             timing.extraction_ms = (time.time() - extract_start) * 1000
-            self._log(f"✅ Extracted {len(flow.actions)} actions ({timing.extraction_ms/1000:.2f}s)")
+            self._log(f"✅ Extracted {len(flow.actions)} raw actions ({timing.extraction_ms/1000:.2f}s)")
+
+            # Reflection: ask the LLM to identify only the essential steps
+            reflect_start = time.time()
+            self._log("🪞 Reflecting on essential steps...")
+            flow.reflected_actions = await self._reflect_on_actions(task, flow.actions)
+            reflect_duration = (time.time() - reflect_start) * 1000
+            self._log(
+                f"✅ Reflected: {len(flow.reflected_actions)} essential steps "
+                f"(from {len(flow.actions)} raw) ({reflect_duration/1000:.2f}s)"
+            )
 
             flow.success = True
 
@@ -493,6 +542,125 @@ wait for modal → select CSV format in dropdown → click the modal's Export/Co
         self.timings.append(timing)
 
         return flow
+
+    async def _reflect_on_actions(
+        self, task: AgentTask, raw_actions: list[RecordedAction]
+    ) -> list[ReflectedAction]:
+        """Ask the LLM to reflect on its exploration and identify essential steps.
+
+        Instead of using heuristic dedup/cleaning, we give the LLM the task
+        description and the full action history, and ask it to return only the
+        minimal steps a real user would need.
+        """
+        from browser_use.llm.messages import SystemMessage, UserMessage
+
+        # Build a summary of recorded actions for the LLM
+        actions_summary = []
+        for i, action in enumerate(raw_actions):
+            entry = {
+                "index": i,
+                "action": action.action_type,
+                "tag": action.element_tag,
+                "text": action.element_text,
+                "attributes": action.element_attributes,
+                "xpath": action.xpath,
+                "input_value": action.input_value,
+                "url_before": action.url_before,
+                "url_after": action.url_after,
+            }
+            actions_summary.append(entry)
+
+        user_prompt = (
+            f'Task: "{task.description}"\n\n'
+            f"Recorded actions during exploration ({len(raw_actions)} total):\n"
+            f"{json.dumps(actions_summary, indent=2)}\n\n"
+            "Now identify only the essential user-facing steps. "
+            "Return them as a structured ReflectedFlow."
+        )
+
+        messages = [
+            SystemMessage(content=self.REFLECTION_PROMPT),
+            UserMessage(content=user_prompt),
+        ]
+
+        try:
+            result = await self.llm.ainvoke(
+                messages, output_format=ReflectedFlow
+            )
+            reflected = result.completion
+            if isinstance(reflected, ReflectedFlow) and reflected.steps:
+                # Ensure last step is marked final
+                for step in reflected.steps:
+                    step.is_final = False
+                reflected.steps[-1].is_final = True
+
+                # Enrich reflected steps with element metadata from raw actions
+                self._enrich_reflected_from_raw(reflected.steps, raw_actions)
+
+                return reflected.steps
+            else:
+                self._log("⚠️  Reflection returned no steps, falling back to raw actions")
+                return self._raw_actions_to_reflected(raw_actions)
+        except Exception as e:
+            self._log(f"⚠️  Reflection failed ({e}), falling back to raw actions")
+            return self._raw_actions_to_reflected(raw_actions)
+
+    def _enrich_reflected_from_raw(
+        self,
+        reflected: list[ReflectedAction],
+        raw_actions: list[RecordedAction],
+    ) -> None:
+        """Fill in element metadata on reflected steps from the raw action recording.
+
+        The LLM returns source_action_index pointing to the raw action each step
+        corresponds to. We pull tag, text, attributes, and xpath from the raw
+        action so selectors can be generated properly.
+        """
+        for step in reflected:
+            idx = step.source_action_index
+            if idx is not None and 0 <= idx < len(raw_actions):
+                raw = raw_actions[idx]
+                step.element = {
+                    "tag": raw.element_tag or "div",
+                    "text": raw.element_text or "",
+                    "attributes": raw.element_attributes or {},
+                    "xpath": raw.xpath,
+                }
+                self._log_verbose(
+                    f"  Enriched step '{step.instruction[:40]}' from raw[{idx}] "
+                    f"({raw.element_tag} / {(raw.element_attributes or {}).get('data-testid', '?')})"
+                )
+            elif not step.element or not step.element.get("tag"):
+                self._log_verbose(
+                    f"  ⚠️  No raw match for step '{step.instruction[:40]}' (index={idx})"
+                )
+
+    def _raw_actions_to_reflected(
+        self, raw_actions: list[RecordedAction]
+    ) -> list[ReflectedAction]:
+        """Convert raw recorded actions to ReflectedAction format as a fallback."""
+        reflected = []
+        for i, action in enumerate(raw_actions):
+            if action.action_type not in ("click", "type", "select"):
+                continue
+            reflected.append(
+                ReflectedAction(
+                    action=action.action_type,
+                    instruction=self._generate_instruction(action),
+                    source_action_index=i,
+                    element={
+                        "tag": action.element_tag or "div",
+                        "text": action.element_text or "",
+                        "attributes": action.element_attributes,
+                        "xpath": action.xpath,
+                    },
+                    input_value=action.input_value,
+                    is_final=False,
+                )
+            )
+        if reflected:
+            reflected[-1].is_final = True
+        return reflected
 
     def _extract_actions_from_history(
         self, history: Any, step_dom_items: list[dict] = None
@@ -882,25 +1050,84 @@ wait for modal → select CSV format in dropdown → click the modal's Export/Co
         return str(index)
 
     def convert_flow_to_target(self, flow: RecordedFlow) -> ManifestTarget | None:
-        """Convert a recorded flow to a manifest target."""
-        if not flow.success or not flow.actions:
+        """Convert a recorded flow to a manifest target.
+
+        Uses reflected_actions (LLM-identified essential steps) when available.
+        Falls back to raw actions with heuristic cleaning only if reflection
+        didn't produce results.
+        """
+        if not flow.success:
             return None
 
         task = flow.task
-
-        # Generate ID
         target_id = generate_id_from_description(task.description)
 
-        # Clean actions before building path: deduplicate and remove noise
-        cleaned_actions = self._clean_actions(flow.actions)
+        # Prefer reflected actions (LLM-curated essential steps)
+        if flow.reflected_actions:
+            path = self._build_path_from_reflected(flow.reflected_actions)
+        elif flow.actions:
+            # Fallback: old pipeline (raw actions → clean → build)
+            path = self._build_path_from_raw_actions(flow.actions)
+        else:
+            return None
 
-        # Build path steps
+        if not path:
+            self._log(f"⚠️  Warning: No valid steps found for task '{flow.task.description}'")
+            return None
+
+        target_selector = path[0].selector
+
+        label = task.description.title()
+        if len(label) > 50:
+            label = label[:47] + "..."
+
+        keywords = extract_keywords(task.description, label)
+
+        return ManifestTarget(
+            id=target_id,
+            selector=target_selector,
+            label=label,
+            description=task.description,
+            keywords=keywords,
+            path=path if path else None,
+        )
+
+    def _build_path_from_reflected(
+        self, reflected_actions: list[ReflectedAction]
+    ) -> list[PathStep]:
+        """Build manifest PathSteps from LLM-reflected essential actions."""
         path: list[PathStep] = []
-        for i, action in enumerate(cleaned_actions):
+        for step in reflected_actions:
+            element_info = {
+                "tag": step.element.get("tag", "div"),
+                "text": step.element.get("text", ""),
+                "attributes": step.element.get("attributes", {}),
+                "xpath": step.element.get("attributes", {}).get("xpath")
+                    or step.element.get("xpath"),
+            }
+            selector = extract_selectors_from_element(element_info)
+
+            path.append(
+                PathStep(
+                    selector=selector,
+                    instruction=step.instruction,
+                    action=step.action,
+                    input=step.input_value,
+                    success_condition=SuccessCondition(click=True),
+                    final=step.is_final,
+                )
+            )
+        return path
+
+    def _build_path_from_raw_actions(
+        self, raw_actions: list[RecordedAction]
+    ) -> list[PathStep]:
+        """Fallback: build path from raw actions (legacy pipeline)."""
+        path: list[PathStep] = []
+        for i, action in enumerate(raw_actions):
             if action.action_type in ("navigate", "scroll"):
                 continue
 
-            # Build element info for selector extraction
             element_info = {
                 "tag": action.element_tag or "div",
                 "text": action.element_text or "",
@@ -909,17 +1136,13 @@ wait for modal → select CSV format in dropdown → click the modal's Export/Co
             }
 
             selector = extract_selectors_from_element(element_info)
-
-            # Generate instruction
             instruction = self._generate_instruction(action)
-
-            # Infer success condition
-            next_action = cleaned_actions[i + 1] if i + 1 < len(cleaned_actions) else None
+            next_action = raw_actions[i + 1] if i + 1 < len(raw_actions) else None
             success_condition = infer_success_condition(action, next_action)
 
-            is_final = i == len(cleaned_actions) - 1 or (
-                i == len(cleaned_actions) - 2
-                and cleaned_actions[-1].action_type in ("navigate", "scroll")
+            is_final = i == len(raw_actions) - 1 or (
+                i == len(raw_actions) - 2
+                and raw_actions[-1].action_type in ("navigate", "scroll")
             )
 
             step = PathStep(
@@ -932,132 +1155,8 @@ wait for modal → select CSV format in dropdown → click the modal's Export/Co
             )
             path.append(step)
 
-        if not path:
-            self._log(f"⚠️  Warning: No valid steps found for task '{flow.task.description}'")
-            if flow.actions:
-                self._log_verbose(f"Had {len(flow.actions)} actions: {[a.action_type for a in flow.actions]}")
-            return None
+        return path
 
-        # Use first step's selector as the target selector
-        # (the starting point for this flow)
-        target_selector = path[0].selector
-
-        # Generate label from task description
-        label = task.description.title()
-        if len(label) > 50:
-            label = label[:47] + "..."
-
-        # Generate keywords
-        keywords = extract_keywords(task.description, label)
-
-        return ManifestTarget(
-            id=target_id,
-            selector=target_selector,
-            label=label,
-            description=task.description,
-            keywords=keywords,
-            path=path if path else None,
-        )
-
-    @staticmethod
-    def _get_element_identity(action: RecordedAction) -> str:
-        """Return a stable identity string for an action's target element.
-
-        Used to detect consecutive duplicate actions on the same element
-        (e.g., the agent clicking "Export" 5 times in a row).
-        """
-        attrs = action.element_attributes or {}
-        # Prefer data-testid as the strongest identity
-        if "data-testid" in attrs:
-            return f"{action.action_type}:testid:{attrs['data-testid']}"
-        # Fallback to aria-label
-        if "aria-label" in attrs:
-            return f"{action.action_type}:aria:{attrs['aria-label']}"
-        # Fallback to tag + trimmed text
-        text = (action.element_text or "").strip()
-        if text:
-            return f"{action.action_type}:text:{action.element_tag or ''}:{text}"
-        # Last resort: xpath
-        if action.xpath:
-            return f"{action.action_type}:xpath:{action.xpath}"
-        return f"{action.action_type}:unknown"
-
-    def _clean_actions(self, actions: list[RecordedAction]) -> list[RecordedAction]:
-        """Remove duplicate and noise actions from a recorded flow.
-
-        Applies two cleaning passes:
-        1. **Deduplication**: Consecutive actions on the same element are collapsed
-           into one. The agent often retries a click multiple times when a modal is
-           slow to open — we only need the first occurrence.
-        2. **Noise removal**: Actions whose element has no relationship to the
-           preceding or following action (wandering clicks) are removed.  We detect
-           these by checking that the action's data-testid / aria-label doesn't
-           appear anywhere else in the sequence; isolated unrelated clicks (e.g.,
-           clicking the user-menu button while trying to export CSV) get dropped.
-        """
-        if len(actions) <= 1:
-            return actions
-
-        # --- Pass 1: collapse consecutive duplicates ---
-        deduped: list[RecordedAction] = [actions[0]]
-        prev_identity = self._get_element_identity(actions[0])
-
-        for action in actions[1:]:
-            identity = self._get_element_identity(action)
-            if identity == prev_identity:
-                # Same element targeted consecutively — skip the duplicate.
-                # Keep the one with richer attributes (more data-testid, etc.)
-                prev = deduped[-1]
-                if len(action.element_attributes) > len(prev.element_attributes):
-                    deduped[-1] = action
-                continue
-            deduped.append(action)
-            prev_identity = identity
-
-        if len(deduped) != len(actions):
-            removed = len(actions) - len(deduped)
-            self._log_verbose(f"Dedup: removed {removed} consecutive duplicate action(s)")
-
-        # --- Pass 2: remove isolated noise actions ---
-        # Collect all data-testid values that appear across the whole sequence.
-        # An action is considered "noise" if its data-testid appears exactly once
-        # AND it is not the first or last step AND the steps before and after it
-        # share a common testid-prefix or the noise step's testid doesn't overlap
-        # with any task-related element.
-        if len(deduped) <= 2:
-            return deduped
-
-        # Build a frequency map of data-testids across the whole flow
-        testid_freq: dict[str, int] = {}
-        for a in deduped:
-            tid = (a.element_attributes or {}).get("data-testid", "")
-            if tid:
-                testid_freq[tid] = testid_freq.get(tid, 0) + 1
-
-        cleaned: list[RecordedAction] = []
-        for i, action in enumerate(deduped):
-            tid = (action.element_attributes or {}).get("data-testid", "")
-            # Only consider removing interior actions (not first/last)
-            if 0 < i < len(deduped) - 1 and tid:
-                # If this testid appears only once AND the previous and next actions
-                # target different testids, it's likely a wandering click
-                prev_tid = (deduped[i - 1].element_attributes or {}).get("data-testid", "")
-                next_tid = (deduped[i + 1].element_attributes or {}).get("data-testid", "")
-                if testid_freq.get(tid, 0) == 1 and prev_tid != tid and next_tid != tid:
-                    # Check if the testid is completely unrelated to neighbors.
-                    # We extract the first segment as a "namespace" prefix
-                    # (e.g., "settings" from "settings-push-notifications").
-                    # If the action shares a prefix with either neighbor it's
-                    # likely part of the same flow and should be kept.
-                    tid_prefix = tid.split("-")[0] if "-" in tid else tid
-                    prev_prefix = prev_tid.split("-")[0] if prev_tid and "-" in prev_tid else prev_tid
-                    next_prefix = next_tid.split("-")[0] if next_tid and "-" in next_tid else next_tid
-                    if tid_prefix != prev_prefix and tid_prefix != next_prefix:
-                        self._log_verbose(f"Noise: removing isolated action on [{tid}] between [{prev_tid}] and [{next_tid}]")
-                        continue
-            cleaned.append(action)
-
-        return cleaned
 
     @staticmethod
     def _clean_element_text(text: str | None) -> str:

@@ -135,14 +135,18 @@ export class Cursor {
       return;
     }
 
-    // Check actionability (covers visibility, size, enabled, viewport, covered)
+    // Check actionability for visual guidance purposes
+    // We use the full check but treat "disabled" and "covered" as pointable:
+    // - disabled: element is still visible, we're guiding not clicking
+    // - covered: element may be behind a modal overlay but still the right target
     const actionability = isActionable(element);
 
     if (
       actionability.reason === "hidden" ||
-      actionability.reason === "no_size"
+      actionability.reason === "no_size" ||
+      actionability.reason === "not_attached"
     ) {
-      // Element exists but is not visible - show tooltip only
+      // Element is truly invisible - show tooltip only
       this.showTooltipOnly(options);
       return;
     }
