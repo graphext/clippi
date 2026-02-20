@@ -249,19 +249,20 @@ Environment variables:
             verbose=args.verbose,
         )
 
-    # Check for API key
-    api_key_var = {
-        "gemini": "GEMINI_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-    }[config.provider]
+    # Check for API key (not needed for rebuild)
+    if not args.rebuild_from_actions:
+        api_key_var = {
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+        }[config.provider]
 
-    if not os.environ.get(api_key_var):
-        print(f"❌ Error: {api_key_var} environment variable is required")
-        print(f"\nSet it with: export {api_key_var}=your-api-key")
-        if config.provider == "gemini":
-            print("Get a key at: https://aistudio.google.com/apikey")
-        sys.exit(1)
+        if not os.environ.get(api_key_var):
+            print(f"❌ Error: {api_key_var} environment variable is required")
+            print(f"\nSet it with: export {api_key_var}=your-api-key")
+            if config.provider == "gemini":
+                print("Get a key at: https://aistudio.google.com/apikey")
+            sys.exit(1)
 
     # Print config summary
     print("🤖 Clippi Agent")

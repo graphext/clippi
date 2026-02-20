@@ -137,7 +137,8 @@ def extract_selectors_from_element(element_info: dict[str, Any]) -> Selector:
             strategies.append(SelectorStrategy(type="css", value=selector))
 
     # Priority 5: Text content (fallback)
-    text = element_info.get("text", "").strip()
+    raw_text = element_info.get("text", "")
+    text = " ".join(raw_text.split()).strip()  # Collapse whitespace
     tag = element_info.get("tag", "")
     if text and len(text) < 50:
         strategies.append(
@@ -261,26 +262,68 @@ and document how to complete specific tasks by clicking through the UI.
 
 ## Goal
 
-DOCUMENT how a user would complete the task inside the app. Click through the flow and call `done` \
-when finished. Do NOT navigate to external sites.
+DOCUMENT how a user would complete the task inside the app. Walk through the COMPLETE flow \
+step-by-step and call `done` when finished. Do NOT navigate to external sites.
 
 ## Critical Rules
 
 1. Stay on the target URL domain. NEVER leave.
-2. Take the MINIMUM steps. Click buttons/links directly by their index.
-3. Use placeholder values for forms (e.g., "Example" for names).
-4. If you encounter a login page, STOP and report it.
-5. Call `done` as soon as the flow is complete.
+2. Use placeholder values for forms (e.g., "Example" for names).
+3. If you encounter a login page, STOP and report it.
+4. Call `done` only after the task is FULLY completed.
 
-## Interaction Strategy (IMPORTANT)
+## Modal & Dialog Handling (VERY IMPORTANT)
+
+Most app actions open a modal/dialog. You MUST complete the full flow inside the modal:
+
+1. **After clicking a button that opens a modal**: WAIT for the modal to appear. Modals often \
+have CSS transitions (opacity, transform). After clicking, call `wait` for 1 second, then look \
+at the page state again.
+2. **Interact with elements INSIDE the modal**: Select dropdowns, fill inputs, check checkboxes. \
+The modal will have its own buttons (like "Export", "Import", "Save Changes", "Create", "Confirm"). \
+These are DIFFERENT from the toolbar buttons that opened the modal, even if they have similar text.
+3. **Click the confirmation button inside the modal** to finish the flow (e.g., "Save Changes", \
+"Export", "Create", "Import", "Confirm").
+4. **NEVER re-click the button that opened the modal**. If you already clicked "Export" on the \
+toolbar and a modal appeared, do NOT click the same toolbar "Export" button again. Instead, \
+interact with the form elements inside the modal and then click the modal's own confirm button.
+
+## Identifying Modal Elements vs Toolbar Elements
+
+- Toolbar/page buttons are at the TOP of the page, inside headers or action bars.
+- Modal buttons are INSIDE `div[role="dialog"]` or elements with classes like `modal`, `modal-footer`.
+- Modal confirm buttons typically have `data-testid` ending in `-confirm`, `-save`, or `-submit`.
+- If you see two buttons with similar text (e.g., "Export"), the one inside the modal is the one \
+you need to click to complete the flow. Check the DOM hierarchy or `data-testid` to tell them apart.
+
+## Interaction Strategy
 
 - ALWAYS try clicking elements by their index first. The page state shows indexed interactive elements.
-- Modern UI modals (e.g. Radix/Shadcn) and dropdowns may take a moment to animate in. If an expected element is not immediately available, you may need to wait or use `data-testid` via JavaScript.
 - If an element you need (e.g., inside a modal or dropdown) is NOT indexed, use `evaluate` with \
 JavaScript to click it directly.
-- **CRITICAL EXCEPTION FOR EVALUATE**: When using `evaluate` to interact with an element, you \
-MUST make your JavaScript return a JSON string describing it. Example: \
-`const el = document.querySelector('[data-testid="my-btn"]'); el.click(); return JSON.stringify({tag: el.tagName, text: el.textContent, attributes: {'data-testid': el.getAttribute('data-testid')}});`
+- **CRITICAL: EVALUATE MUST RETURN ELEMENT INFO.** Every `evaluate` call that clicks/interacts \
+with an element MUST return a JSON string describing it. Without this, we cannot record the action. \
+Use this exact pattern:
+
+```
+(function(){
+  const el = document.querySelector('[data-testid="my-btn"]');
+  if(!el) return JSON.stringify({error: "not found"});
+  el.click();
+  return JSON.stringify({
+    tag: el.tagName,
+    text: el.textContent.trim(),
+    attributes: {
+      "data-testid": el.getAttribute("data-testid") || undefined,
+      "aria-label": el.getAttribute("aria-label") || undefined,
+      "class": el.getAttribute("class") || undefined
+    }
+  });
+})()
+```
+
+- NEVER write evaluate code that just does `el.click()` without returning the JSON descriptor.
+- Filter out null/undefined attribute values — only include attributes that exist.
 - Do NOT call `find_elements` more than once per modal/dialog. If `find_elements` does not give \
 you a clickable index, switch to `evaluate` immediately.
 - NEVER repeat the same `find_elements` call. If you already tried it, use a different approach.
@@ -292,11 +335,14 @@ Each click, type, and select action captures the element's tag, text, and attrib
 
 ## Output Quality & Hallucination Prevention
 
-- **CRITICAL**: Before calling `done`, you MUST verify the final state. If you opened a dropdown or a menu, you MUST wait or interact with the next element inside it first.
+- **CRITICAL**: Before calling `done`, you MUST verify the final state matches what the task \
+asked for. If you opened a modal, you MUST interact with the modal contents (dropdowns, inputs) \
+AND click the modal's confirm/save button before calling `done`.
 - Do NOT hallucinate dialogs or modals being open if they are not present in the browser state.
 - Prefer elements with `data-testid` or `aria-label` (stable selectors).
 - Navigate via the app's UI (nav bar, sidebar, menus), not by URL.
-- Complete multi-step flows fully (e.g., for "export to CSV": click Export, select CSV, confirm).
+- Complete multi-step flows fully (e.g., for "export to CSV": click Export toolbar button → \
+wait for modal → select CSV format in dropdown → click the modal's Export/Confirm button).
 """
 
     def __init__(self, config: AgentConfig):
@@ -321,9 +367,24 @@ Each click, type, and select action captures the element's tag, text, and attrib
     def _build_task_prompt(self, task: AgentTask) -> str:
         """Build the task prompt for the Browser Use agent."""
         parts = [
-            f'Navigate to {self.config.url} and find how to: "{task.description}".',
+            f'Navigate to {self.config.url} and complete this task: "{task.description}".',
             "",
-            "Walk through the application UI to locate and interact with the relevant elements.",
+            "Walk through the COMPLETE flow step-by-step:",
+            "1. Find and click the relevant button/link on the page.",
+            "2. If a modal or dialog opens, WAIT for it to fully appear, then interact with",
+            "   the form elements RELEVANT TO THE TASK (dropdowns, inputs, checkboxes).",
+            "3. Click the confirmation/save button INSIDE the modal to finish.",
+            "",
+            "IMPORTANT:",
+            "- Each step should interact with a DIFFERENT element. Never click the same button twice.",
+            "- If a modal opened, work inside it — don't re-click the trigger button.",
+            "- ONLY interact with elements that are directly relevant to the task description.",
+            "  Do NOT fill in or change form fields that the task doesn't ask about.",
+            '  For example, if the task says "change theme to dark mode", ONLY change the theme',
+            "  dropdown — do NOT also change the language or timezone.",
+            '  If the task says "find my API key", navigate to the API key section and STOP.',
+            "  Do NOT explore every settings tab or fill in unrelated forms.",
+            "",
             f"Stay within {self.config.url} at all times. Do not leave this site.",
         ]
         if self.config.docs_context:
@@ -501,10 +562,14 @@ Each click, type, and select action captures the element's tag, text, and attrib
                     params = action_data.get(action_name, {})
                     if isinstance(params, dict):
                         input_value = params.get("text") or params.get("value") or params.get("keys")
-                        
-                        # Special handling for select actions
+
+                        # Special handling for select actions: the LLM's select_dropdown
+                        # action has a "text" field with the option text (e.g., "Dark").
+                        # Only fall back to DOM state lookup if that text is missing or
+                        # looks like a raw index (pure digits).
                         if action_type == "select" and "index" in params:
-                             input_value = self._get_dropdown_option_from_state(step, params["index"])
+                            if not input_value or (isinstance(input_value, str) and input_value.isdigit()):
+                                input_value = self._get_dropdown_option_from_state(step, params["index"])
                 except Exception:
                     pass
 
@@ -517,11 +582,24 @@ Each click, type, and select action captures the element's tag, text, and attrib
                             if isinstance(parsed_elem, dict) and "tag" in parsed_elem:
                                 element_info["tag"] = parsed_elem.get("tag", "").lower()
                                 element_info["text"] = parsed_elem.get("text", "")
-                                element_info["attributes"] = parsed_elem.get("attributes", {})
+                                # Sanitize attributes: filter out None values,
+                                # convert all to str (Pydantic requires dict[str, str])
+                                raw_attrs = parsed_elem.get("attributes", {})
+                                element_info["attributes"] = {
+                                    str(k): str(v) for k, v in raw_attrs.items()
+                                    if v is not None
+                                }
                                 # Change action to click for path building if it's evaluate
                                 action_type = "click"
                     except Exception:
                         pass
+
+                # If evaluate didn't produce usable element data, skip it entirely.
+                # (action_type stays "evaluate" when the JS didn't return valid JSON
+                # with element metadata — there's nothing meaningful to record.)
+                if action_type == "evaluate":
+                    self._log_verbose(f"      ⏭️  Skipped evaluate (no element data extracted)")
+                    continue
 
                 # Update URL from result if navigation occurred
                 if hasattr(step, "result") and step.result and len(step.result) > action_idx:
@@ -593,8 +671,6 @@ Each click, type, and select action captures the element's tag, text, and attrib
             curr_items = list(curr_selector_map.values())
             next_items = list(next_selector_map.values())
 
-            print(f"DEBUG: step {step_idx} DOM items length = {len(curr_items)}")
-            
             curr_paths = {}
             for item in curr_items:
                 xp = getattr(item, "x_path", None) or getattr(item, "xpath", None)
@@ -608,7 +684,6 @@ Each click, type, and select action captures the element's tag, text, and attrib
                     next_paths[xp] = item
 
             added_xpaths = set(next_paths.keys()) - set(curr_paths.keys())
-            print(f"DEBUG: step {step_idx} added_xpaths count = {len(added_xpaths)}")
             
             elements_added = []
             for xp in list(added_xpaths)[:5]:  # Limit to 5 for brevity
@@ -754,12 +829,8 @@ Each click, type, and select action captures the element's tag, text, and attrib
         # In browser_use 0.11.9, DOMInteractedElement uses x_path instead of xpath
         if hasattr(elem, "x_path") and elem.x_path:
             element_info["xpath"] = elem.x_path
-            print(f"DEBUG: extracted xpath {elem.x_path}")
         elif hasattr(elem, "xpath") and elem.xpath:
             element_info["xpath"] = elem.xpath
-            print(f"DEBUG: extracted xpath {elem.xpath}")
-        else:
-            print(f"DEBUG: no xpath on interacted element {elem}")
 
         # Use ax_name as fallback text
         if not element_info.get("text") and hasattr(elem, "ax_name") and elem.ax_name:
@@ -770,31 +841,44 @@ Each click, type, and select action captures the element's tag, text, and attrib
         return element_info
 
     def _get_dropdown_option_from_state(self, step: Any, index: int) -> str | None:
-        """Helper to get the text or value of a dropdown option by index from the state."""
+        """Get the text or value of a dropdown option by index from the state.
+
+        Browser Use's select_dropdown uses a highlight_index to identify the
+        chosen <option>. We look in both interacted_element list and the
+        DOM selector_map to find the actual option text/value.
+        """
         if not hasattr(step, "state") or not step.state:
-            return None
-            
-        interacted_elements = getattr(step.state, "interacted_element", [])
-        if not interacted_elements:
-             # Try falling back to items if interacted_element is empty
-             interacted_elements = getattr(step.state, "items", getattr(step.state, "dom_items", []))
-             
-        if not interacted_elements or isinstance(interacted_elements, dict):
             return str(index)
-            
-        # If it's a list, try doing a lookup
-        try:
-           # Find the element with the matching index in the state
-           for item in interacted_elements:
-               if hasattr(item, "highlight_index") and item.highlight_index == index:
-                   if hasattr(item, "node_value") and item.node_value:
-                        return item.node_value
-                   if hasattr(item, "attributes") and item.attributes:
-                        if "value" in item.attributes:
-                            return item.attributes["value"]
-        except Exception:
-           pass
-           
+
+        # Strategy 1: Check interacted_element list
+        interacted_elements = getattr(step.state, "interacted_element", [])
+        if interacted_elements and not isinstance(interacted_elements, dict):
+            try:
+                for item in interacted_elements:
+                    if hasattr(item, "highlight_index") and item.highlight_index == index:
+                        if hasattr(item, "node_value") and item.node_value:
+                            return item.node_value
+                        if hasattr(item, "attributes") and item.attributes:
+                            if "value" in item.attributes:
+                                return item.attributes["value"]
+            except Exception:
+                pass
+
+        # Strategy 2: Check DOM selector_map for the option element at this index
+        if hasattr(step.state, "dom_state") and hasattr(step.state.dom_state, "selector_map"):
+            selector_map = step.state.dom_state.selector_map
+            if index in selector_map:
+                item = selector_map[index]
+                tag = getattr(item, "node_name", "").lower()
+                if tag == "option":
+                    # Return the option's text or value attribute
+                    text = getattr(item, "node_value", None) or getattr(item, "ax_name", None)
+                    if text:
+                        return " ".join(text.split()).strip()
+                    attrs = dict(getattr(item, "attributes", {}) or {})
+                    if "value" in attrs:
+                        return attrs["value"]
+
         return str(index)
 
     def convert_flow_to_target(self, flow: RecordedFlow) -> ManifestTarget | None:
@@ -807,9 +891,12 @@ Each click, type, and select action captures the element's tag, text, and attrib
         # Generate ID
         target_id = generate_id_from_description(task.description)
 
+        # Clean actions before building path: deduplicate and remove noise
+        cleaned_actions = self._clean_actions(flow.actions)
+
         # Build path steps
         path: list[PathStep] = []
-        for i, action in enumerate(flow.actions):
+        for i, action in enumerate(cleaned_actions):
             if action.action_type in ("navigate", "scroll"):
                 continue
 
@@ -827,12 +914,12 @@ Each click, type, and select action captures the element's tag, text, and attrib
             instruction = self._generate_instruction(action)
 
             # Infer success condition
-            next_action = flow.actions[i + 1] if i + 1 < len(flow.actions) else None
+            next_action = cleaned_actions[i + 1] if i + 1 < len(cleaned_actions) else None
             success_condition = infer_success_condition(action, next_action)
 
-            is_final = i == len(flow.actions) - 1 or (
-                i == len(flow.actions) - 2
-                and flow.actions[-1].action_type in ("navigate", "scroll")
+            is_final = i == len(cleaned_actions) - 1 or (
+                i == len(cleaned_actions) - 2
+                and cleaned_actions[-1].action_type in ("navigate", "scroll")
             )
 
             step = PathStep(
@@ -872,18 +959,128 @@ Each click, type, and select action captures the element's tag, text, and attrib
             path=path if path else None,
         )
 
+    @staticmethod
+    def _get_element_identity(action: RecordedAction) -> str:
+        """Return a stable identity string for an action's target element.
+
+        Used to detect consecutive duplicate actions on the same element
+        (e.g., the agent clicking "Export" 5 times in a row).
+        """
+        attrs = action.element_attributes or {}
+        # Prefer data-testid as the strongest identity
+        if "data-testid" in attrs:
+            return f"{action.action_type}:testid:{attrs['data-testid']}"
+        # Fallback to aria-label
+        if "aria-label" in attrs:
+            return f"{action.action_type}:aria:{attrs['aria-label']}"
+        # Fallback to tag + trimmed text
+        text = (action.element_text or "").strip()
+        if text:
+            return f"{action.action_type}:text:{action.element_tag or ''}:{text}"
+        # Last resort: xpath
+        if action.xpath:
+            return f"{action.action_type}:xpath:{action.xpath}"
+        return f"{action.action_type}:unknown"
+
+    def _clean_actions(self, actions: list[RecordedAction]) -> list[RecordedAction]:
+        """Remove duplicate and noise actions from a recorded flow.
+
+        Applies two cleaning passes:
+        1. **Deduplication**: Consecutive actions on the same element are collapsed
+           into one. The agent often retries a click multiple times when a modal is
+           slow to open — we only need the first occurrence.
+        2. **Noise removal**: Actions whose element has no relationship to the
+           preceding or following action (wandering clicks) are removed.  We detect
+           these by checking that the action's data-testid / aria-label doesn't
+           appear anywhere else in the sequence; isolated unrelated clicks (e.g.,
+           clicking the user-menu button while trying to export CSV) get dropped.
+        """
+        if len(actions) <= 1:
+            return actions
+
+        # --- Pass 1: collapse consecutive duplicates ---
+        deduped: list[RecordedAction] = [actions[0]]
+        prev_identity = self._get_element_identity(actions[0])
+
+        for action in actions[1:]:
+            identity = self._get_element_identity(action)
+            if identity == prev_identity:
+                # Same element targeted consecutively — skip the duplicate.
+                # Keep the one with richer attributes (more data-testid, etc.)
+                prev = deduped[-1]
+                if len(action.element_attributes) > len(prev.element_attributes):
+                    deduped[-1] = action
+                continue
+            deduped.append(action)
+            prev_identity = identity
+
+        if len(deduped) != len(actions):
+            removed = len(actions) - len(deduped)
+            self._log_verbose(f"Dedup: removed {removed} consecutive duplicate action(s)")
+
+        # --- Pass 2: remove isolated noise actions ---
+        # Collect all data-testid values that appear across the whole sequence.
+        # An action is considered "noise" if its data-testid appears exactly once
+        # AND it is not the first or last step AND the steps before and after it
+        # share a common testid-prefix or the noise step's testid doesn't overlap
+        # with any task-related element.
+        if len(deduped) <= 2:
+            return deduped
+
+        # Build a frequency map of data-testids across the whole flow
+        testid_freq: dict[str, int] = {}
+        for a in deduped:
+            tid = (a.element_attributes or {}).get("data-testid", "")
+            if tid:
+                testid_freq[tid] = testid_freq.get(tid, 0) + 1
+
+        cleaned: list[RecordedAction] = []
+        for i, action in enumerate(deduped):
+            tid = (action.element_attributes or {}).get("data-testid", "")
+            # Only consider removing interior actions (not first/last)
+            if 0 < i < len(deduped) - 1 and tid:
+                # If this testid appears only once AND the previous and next actions
+                # target different testids, it's likely a wandering click
+                prev_tid = (deduped[i - 1].element_attributes or {}).get("data-testid", "")
+                next_tid = (deduped[i + 1].element_attributes or {}).get("data-testid", "")
+                if testid_freq.get(tid, 0) == 1 and prev_tid != tid and next_tid != tid:
+                    # Check if the testid is completely unrelated to neighbors.
+                    # We extract the first segment as a "namespace" prefix
+                    # (e.g., "settings" from "settings-push-notifications").
+                    # If the action shares a prefix with either neighbor it's
+                    # likely part of the same flow and should be kept.
+                    tid_prefix = tid.split("-")[0] if "-" in tid else tid
+                    prev_prefix = prev_tid.split("-")[0] if prev_tid and "-" in prev_tid else prev_tid
+                    next_prefix = next_tid.split("-")[0] if next_tid and "-" in next_tid else next_tid
+                    if tid_prefix != prev_prefix and tid_prefix != next_prefix:
+                        self._log_verbose(f"Noise: removing isolated action on [{tid}] between [{prev_tid}] and [{next_tid}]")
+                        continue
+            cleaned.append(action)
+
+        return cleaned
+
+    @staticmethod
+    def _clean_element_text(text: str | None) -> str:
+        """Normalize element text: collapse whitespace and trim."""
+        if not text:
+            return ""
+        # Collapse all whitespace (newlines, tabs, multiple spaces) into single space
+        return " ".join(text.split()).strip()
+
     def _generate_instruction(self, action: RecordedAction) -> str:
         """Generate a human-readable instruction for an action."""
+        text = self._clean_element_text(action.element_text)
+
         if action.action_type == "click":
-            if action.element_text:
-                return f'Click on "{action.element_text}"'
+            if text:
+                return f'Click on "{text}"'
             elif action.element_tag:
                 return f"Click the {action.element_tag}"
             return "Click here"
 
         elif action.action_type == "type":
-            if action.element_text:
-                return f'Type in the "{action.element_text}" field'
+            if text:
+                return f'Type in the "{text}" field'
             return "Enter text"
 
         elif action.action_type == "select":

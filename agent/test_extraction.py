@@ -28,13 +28,15 @@ def make_step(actions, elements, url="http://localhost:3000"):
     return step
 
 
-def make_element(tag, text, attributes, ax_name=None):
+def make_element(tag, text, attributes, ax_name=None, xpath=None):
     """Create a mock DOMInteractedElement."""
     elem = Mock()
     elem.node_name = tag
     elem.node_value = text
     elem.attributes = attributes
     elem.ax_name = ax_name
+    elem.x_path = xpath
+    elem.xpath = xpath
     return elem
 
 
